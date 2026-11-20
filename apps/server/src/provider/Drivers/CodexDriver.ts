@@ -1,5 +1,9 @@
 import { resolveProviderProbeTimeoutMs } from "@t3tools/provider-core/server/snapshotProbe";
-import { CodexSettings, ProviderDriverKind } from "@t3tools/contracts";
+import {
+  CodexSettings,
+  ProviderDriverKind,
+  type ProviderMcpServerStatus,
+} from "@t3tools/contracts";
 import * as Digest from "effect/crypto/Digest";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import type * as Signature from "effect/crypto/Signature";
@@ -33,6 +37,7 @@ import {
   withCodexAppServerClient,
 } from "../CodexProvider.ts";
 import { resolveCodexLaunchArgs } from "../codexLaunchArgs.ts";
+import { toCodexProviderMcpServerStatus } from "../codexMcpStatus.ts";
 import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
 import * as ModelCatalog from "@t3tools/provider-core/server/ModelCatalog";
 import { applyCodexModelCatalog } from "../codexModelCatalog.ts";
@@ -414,6 +419,48 @@ export const CodexDriver: ProviderDriver<
         Effect.forkScoped,
       );
     }
+    // User-level servers only: from the home directory no project config.toml applies.
+    const mcpDirectory = yield* HostProcess.HomeDirectory;
+    const mcpStatus: NonNullable<ProviderInstance["mcpStatus"]> = Effect.fn(
+      "CodexDriver.mcpStatus",
+    )(
+      function* () {
+        const { client } = yield* withCodexAppServerClient({
+          binaryPath: effectiveConfig.binaryPath,
+          homePath: effectiveConfig.homePath,
+          launchArgs: resolveCodexLaunchArgs(effectiveConfig.launchArgs, processEnv),
+          cwd: mcpDirectory,
+          environment: processEnv,
+        });
+        const servers: Array<ProviderMcpServerStatus> = [];
+        let cursor: string | null | undefined;
+        do {
+          const page = yield* client.request("mcpServerStatus/list", {
+            detail: "toolsAndAuthOnly",
+            ...(cursor ? { cursor } : {}),
+          });
+          servers.push(...page.data.map(toCodexProviderMcpServerStatus));
+          cursor = page.nextCursor;
+        } while (cursor);
+        return servers;
+      },
+      (effect) =>
+        effect.pipe(
+          Effect.scoped,
+          Effect.timeout(resolveProviderProbeTimeoutMs("codex", 20_000, processEnv)),
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          Effect.mapError(
+            (cause) =>
+              new ProviderDriverError({
+                driver: DRIVER_KIND,
+                instanceId,
+                detail: "Codex could not report its MCP servers.",
+                cause,
+              }),
+          ),
+        ),
+    );
+
     return {
       instanceId,
       driverKind: DRIVER_KIND,
@@ -424,6 +471,7 @@ export const CodexDriver: ProviderDriver<
       snapshot,
       snapshotForCwd,
       consumeResetCredit,
+      mcpStatus,
       orchestrationAdapter,
       textGeneration,
     } satisfies ProviderInstance;

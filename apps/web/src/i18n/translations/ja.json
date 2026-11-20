@@ -12151,5 +12151,16 @@
   "685df5b114420fb9": "Keep this computer awake",
   "97de36c8000d511e": "Let this computer sleep",
   "1cb66db2f6a9786b": "Awaiting reply",
-  "02a9e0b8a3d1eb82": "Mark handled"
+  "02a9e0b8a3d1eb82": "Mark handled",
+  "45ac5f23860444e2": "Connected",
+  "19e40324beeb7fa3": "Needs sign-in",
+  "1a73dda908869aaf": "Failed",
+  "b8a99075ad5380ff": "Disabled",
+  "7e34f67b761b0d64": "Connecting",
+  "724baefb1716842b": "MCP servers",
+  "5359004754a1abff": "User-level servers this provider loads, and whether each needs you to sign in. Projects can add more.",
+  "79e4d73c1bc8cf45": "Checking",
+  "cf719233a04fe23e": "Check",
+  "a34eb3a42e778e50": "This provider does not report its MCP servers.",
+  "c2a10e240668feb4": "This provider loads no MCP servers."
 }

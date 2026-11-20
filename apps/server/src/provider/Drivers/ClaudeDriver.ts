@@ -33,6 +33,7 @@ import {
   checkClaudeProviderStatus,
   makePendingClaudeProvider,
   probeClaudeCapabilities,
+  probeClaudeMcpStatus,
   probeClaudeWorkspaceSnapshot,
   type ClaudeCapabilitiesProbe,
 } from "../ClaudeProvider.ts";
@@ -407,6 +408,23 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
       ),
     );
 
+    // User-level servers only: from the home directory no project `.mcp.json` applies.
+    const homeDirectory = yield* HostProcess.HomeDirectory;
+    const mcpStatus = () =>
+      probeClaudeMcpStatus(effectiveConfig, processEnv, homeDirectory).pipe(
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provideService(Path.Path, path),
+        Effect.mapError(
+          (cause) =>
+            new ProviderDriverError({
+              driver: DRIVER_KIND,
+              instanceId,
+              detail: "Claude could not report its MCP servers.",
+              cause,
+            }),
+        ),
+      );
+
     return {
       instanceId,
       driverKind: DRIVER_KIND,
@@ -431,6 +449,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
       orchestrationAdapter,
       textGeneration,
       consumeResetCredit,
+      mcpStatus,
     } satisfies ProviderInstance;
   }),
 };

@@ -190,6 +190,7 @@ import * as NpmRelease from "./cloud/npmRelease.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as SecretResolver from "@t3tools/secret-provider-core/server/SecretResolver";
+import { redactProviderFailureText } from "@t3tools/provider-core/server/failure";
 import * as ServerSettings from "./serverSettings.ts";
 import { invalidateSettingsSecrets } from "./sourceControl/sourceControlHostSecrets.ts";
 import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
@@ -2662,6 +2663,39 @@ export const layerWsRpc = (
             );
             return { outcome };
           }),
+        [WS_METHODS.providerMcpStatus]: Effect.fnUntraced(function* (input) {
+          const instance = yield* providerInstances.getInstance(input.instanceId);
+          if (instance === undefined || !instance.enabled) {
+            return yield* new ProviderSetupError({
+              instanceId: input.instanceId,
+              operation: "mcp-status",
+              detail: instance ? "This provider is disabled." : "Provider instance not found.",
+            });
+          }
+          if (instance.mcpStatus === undefined) return { supported: false as const };
+          // The cause can carry headers and URLs, so it stays in the server log.
+          const servers = yield* instance.mcpStatus().pipe(
+            Effect.tapError((error) =>
+              Effect.logWarning("provider MCP status failed", { cause: error }),
+            ),
+            Effect.mapError(
+              (error) =>
+                new ProviderSetupError({
+                  instanceId: input.instanceId,
+                  operation: "mcp-status",
+                  detail: error.detail,
+                }),
+            ),
+          );
+          return {
+            supported: true as const,
+            servers: servers.map((server) =>
+              server.detail === undefined
+                ? server
+                : { ...server, detail: redactProviderFailureText(server.detail) },
+            ),
+          };
+        }),
         [WS_METHODS.providerAuthStart]: (input) => providerAuth.start(input, currentSessionId),
         [WS_METHODS.providerAuthRespond]: (input) =>
           Effect.annotateCurrentSpan({ instanceId: input.instanceId }).pipe(

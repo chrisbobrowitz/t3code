@@ -57,6 +57,7 @@ import {
   type ProbedOpenCode,
 } from "./versionProbe.ts";
 import * as OpenCodeServerOwner from "./OpenCodeServerOwner.ts";
+import { toProviderMcpServerStatuses } from "./mcpStatus.ts";
 import * as OpenCode2Client from "./v2/OpenCode2Client.ts";
 import * as OpenCode2Server from "./v2/OpenCode2Server.ts";
 import { replaceOutdatedService } from "./v2/OpenCode2Service.ts";
@@ -618,6 +619,66 @@ export const OpenCodeDriver: ProviderDriver<
             ),
           );
 
+    // User-level servers only: from the home directory no project config applies.
+    const mcpDirectory = yield* HostProcess.HomeDirectory;
+    const readOpenCodeV1McpStatus = Effect.scoped(
+      Effect.gen(function* () {
+        const password = effectiveConfig.serverPassword
+          ? { serverPassword: effectiveConfig.serverPassword }
+          : {};
+        const read = (baseUrl: string, serverPassword: string | undefined) =>
+          OpenCodeRuntime.runOpenCodeSdk("mcp.status", (signal) =>
+            openCodeRuntime
+              .createOpenCodeSdkClient({
+                baseUrl,
+                directory: mcpDirectory,
+                ...(serverPassword !== undefined ? { serverPassword } : {}),
+              })
+              .mcp.status(undefined, { signal, throwOnError: true }),
+          ).pipe(
+            Effect.map((response) =>
+              toProviderMcpServerStatuses(Object.entries(response.data ?? {})),
+            ),
+          );
+        if (effectiveConfig.serverUrl.trim().length === 0) {
+          return yield* serverOwner.withServer((server) => read(server.url, server.serverPassword));
+        }
+        const server = yield* openCodeRuntime.connectToOpenCodeServer({
+          binaryPath: effectiveConfig.binaryPath,
+          directory: mcpDirectory,
+          serverUrl: effectiveConfig.serverUrl,
+          ...password,
+          environment: processEnv,
+        });
+        return yield* read(server.url, effectiveConfig.serverPassword || undefined);
+      }),
+    );
+    const readOpenCodeV2McpStatus = openCode2Server.withConnection(({ client, external }) =>
+      client.mcp
+        .list(external ? undefined : { location: { directory: mcpDirectory } })
+        .pipe(
+          Effect.map((list) =>
+            toProviderMcpServerStatuses(list.data.map((server) => [server.name, server.status])),
+          ),
+        ),
+    );
+    const mcpStatus = () =>
+      byOpenCodeRuntime(runtimeProbe.get, {
+        v1: readOpenCodeV1McpStatus,
+        v2: readOpenCodeV2McpStatus,
+      }).pipe(
+        Effect.timeout(resolveProviderProbeTimeoutMs("opencode", 10_000, processEnv)),
+        Effect.mapError(
+          (cause) =>
+            new ProviderDriverError({
+              driver: DRIVER_KIND,
+              instanceId,
+              detail: "OpenCode could not report its MCP servers.",
+              cause,
+            }),
+        ),
+      );
+
     const serverUrl = effectiveConfig.serverUrl.trim();
     const afterUpdate =
       serverUrl.length > 0
@@ -788,6 +849,7 @@ export const OpenCodeDriver: ProviderDriver<
       afterUpdate,
       orchestrationAdapter,
       textGeneration,
+      mcpStatus,
     } satisfies ProviderInstance;
   }),
 };

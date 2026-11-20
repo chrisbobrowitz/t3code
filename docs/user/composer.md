@@ -293,6 +293,13 @@ After you add or change skills, plugins, or MCP servers, use **Restart agent
 session** in the command palette on web and desktop. The conversation continues,
 and your next message starts the agent again with the new setup.
 
+To see which MCP servers a provider loads, and which need you to sign in, open
+**Settings → Providers**, expand the provider, and select **Check** under
+**MCP servers**. A check can start the provider and its MCP servers, so it runs
+only when you ask. It lists user-level servers; a project can add more. Sign in
+with the provider's own CLI, such as `/mcp` in Claude Code or
+`opencode mcp auth <name>`, then check again.
+
 Provider commands must start the message to run. T3 Code commands such as
 `/model` and skill mentions work on any line.
 

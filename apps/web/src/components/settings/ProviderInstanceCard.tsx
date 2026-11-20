@@ -69,6 +69,7 @@ import { ProviderAccentColorPicker } from "./ProviderAccentColorPicker";
 import { RedactedSensitiveText } from "./RedactedSensitiveText";
 import { SettingResetButton, SettingsRow, SettingsSection } from "./settingsLayout";
 import { AcpSessionManagementSection } from "./AcpSessionManagementSection";
+import { ProviderMcpServersSection } from "./ProviderMcpServersSection";
 import { FoldedSettingsSection } from "./FoldedSettingsSection";
 import { readCodexSetupMode } from "./CodexSetupSection.logic";
 import {
@@ -1474,6 +1475,13 @@ export function ProviderInstanceCard({
           />
         </div>
       </SettingsSection>
+      {environmentId !== undefined && liveProvider !== undefined && liveProvider.enabled ? (
+        <ProviderMcpServersSection
+          key={JSON.stringify([environmentId, instanceId])}
+          environmentId={environmentId}
+          instanceId={instanceId}
+        />
+      ) : null}
       {environmentId !== undefined && liveProvider?.driver === "acpRegistry" ? (
         <AcpSessionManagementSection
           environmentId={environmentId}

@@ -710,6 +710,8 @@ export const AntigravityDriver: ProviderDriver<
       textGeneration,
       auth: authFlow.controller,
       refreshModels,
+      // Sessions run in a private profile and get `mcpServers: []`, so none load.
+      mcpStatus: () => Effect.succeed([]),
     } satisfies ProviderInstance;
   }),
 };

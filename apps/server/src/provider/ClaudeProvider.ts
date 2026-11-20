@@ -5,6 +5,8 @@ import { resolveProviderProbeTimeoutMs } from "@t3tools/provider-core/server/sna
 import {
   type ClaudeSettings,
   type ModelCapabilities,
+  type ProviderMcpServerState,
+  type ProviderMcpServerStatus,
   type ServerProvider,
   type ServerProviderModel,
   type ServerProviderSlashCommand,
@@ -27,6 +29,7 @@ import * as SpawnWorker from "../process/SpawnWorker.ts";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import {
   query as claudeQuery,
+  type McpServerStatus,
   type ModelInfo as ClaudeModelInfo,
   type Options as ClaudeQueryOptions,
   type SlashCommand as ClaudeSlashCommand,
@@ -275,6 +278,8 @@ export function buildClaudeCapabilitiesProbeQueryOptions(input: {
   readonly cwd: string | undefined;
   readonly managedMcpConfig: boolean;
   readonly spawnVia: "env" | "launcher-thread" | undefined;
+  /** Load the user's MCP servers, for a probe that reads their status. */
+  readonly loadMcpServers?: boolean;
 }): ClaudeQueryOptions {
   return {
     ...(input.spawnVia === "env" ? { spawnClaudeCodeProcess: spawnClaudeProbeThroughEnv } : {}),
@@ -289,12 +294,13 @@ export function buildClaudeCapabilitiesProbeQueryOptions(input: {
     settings: { disableAllHooks: true },
     allowedTools: [],
     // Exclude filesystem MCP servers; omit strict mode when managed-mcp.json already excludes them and forbids the flag.
-    mcpServers: {},
-    ...(input.managedMcpConfig ? {} : { strictMcpConfig: true }),
+    ...(input.loadMcpServers
+      ? {}
+      : { mcpServers: {}, ...(input.managedMcpConfig ? {} : { strictMcpConfig: true }) }),
     env: {
       ...providerProbeEnvironment(input.environment),
       // Disable claude.ai MCP separately; it is discovered outside filesystem config.
-      ENABLE_CLAUDEAI_MCP_SERVERS: "false",
+      ...(input.loadMcpServers ? {} : { ENABLE_CLAUDEAI_MCP_SERVERS: "false" }),
       // Skipping this avoids a Windows tasklist | findstr process tree on every refresh.
       FORCE_CODE_TERMINAL: undefined,
       CLAUDE_CODE_AUTO_CONNECT_IDE: "0",
@@ -478,7 +484,10 @@ function claudeGatewayDiscoveryGraceMs(environment: Readonly<Record<string, unkn
 
 class ClaudeCapabilitiesProbeSdkError extends Schema.TaggedError<ClaudeCapabilitiesProbeSdkError>()(
   "ClaudeCapabilitiesProbeSdkError",
-  { operation: Schema.Literals(["initialize", "usage", "settings"]), cause: Schema.Defect() },
+  {
+    operation: Schema.Literals(["initialize", "usage", "settings", "mcpStatus"]),
+    cause: Schema.Defect(),
+  },
 ) {
   override get message(): string {
     return `Claude capability probe ${this.operation} failed.`;
@@ -618,6 +627,95 @@ const probeClaudeCapabilities = (
 };
 
 type ClaudeCapabilitiesProbeError = Effect.Error<ReturnType<typeof probeClaudeCapabilities>>;
+
+const CLAUDE_MCP_STATE: Record<McpServerStatus["status"], ProviderMcpServerState> = {
+  connected: "connected",
+  failed: "failed",
+  "needs-auth": "needsAuth",
+  pending: "pending",
+  disabled: "disabled",
+};
+
+function toProviderMcpServerStatus(server: McpServerStatus): ProviderMcpServerStatus {
+  return {
+    name: server.name,
+    state: CLAUDE_MCP_STATE[server.status] ?? "failed",
+    ...(server.scope ? { scope: server.scope } : {}),
+    ...(server.error ? { detail: server.error } : {}),
+  };
+}
+
+// MCP servers connect after initialization, and slow stdio servers can take several seconds.
+const MCP_STATUS_POLLS = 20;
+const MCP_STATUS_POLL_INTERVAL = "500 millis";
+
+/** Starts Claude with the user's MCP servers, reads their status once they settle, then exits. */
+export const probeClaudeMcpStatus = (
+  claudeSettings: ClaudeSettings,
+  environment: NodeJS.ProcessEnv,
+  cwd: string,
+) => {
+  const abort = new AbortController();
+  const abortProbe = Effect.sync(() => {
+    if (!abort.signal.aborted) abort.abort();
+  });
+  return Effect.gen(function* () {
+    const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
+    const executablePath = yield* resolveClaudeSdkExecutablePath(
+      claudeSettings.binaryPath,
+      claudeEnvironment,
+    );
+    const managedMcpConfig = yield* hasClaudeManagedMcpConfig();
+    const platform = yield* HostProcess.Platform;
+    const spawnVia =
+      platform === "win32"
+        ? "launcher-thread"
+        : platform === "linux" && (yield* Effect.promise(supportsEnvChdir))
+          ? "env"
+          : undefined;
+    const q = yield* Effect.tryPromise({
+      try: async () => {
+        const query = claudeQuery({
+          // oxlint-disable-next-line require-yield -- never yields, so no prompt reaches the API
+          prompt: (async function* (): AsyncGenerator<SDKUserMessage> {
+            await waitForAbortSignal(abort.signal);
+          })(),
+          options: buildClaudeCapabilitiesProbeQueryOptions({
+            executablePath,
+            abortController: abort,
+            environment: claudeEnvironment,
+            cwd,
+            managedMcpConfig,
+            spawnVia,
+            loadMcpServers: true,
+          }),
+        });
+        await query.initializationResult();
+        return query;
+      },
+      catch: (cause) => new ClaudeCapabilitiesProbeSdkError({ operation: "initialize", cause }),
+    });
+    const read = Effect.tryPromise({
+      try: () => q.mcpServerStatus(),
+      catch: (cause) => new ClaudeCapabilitiesProbeSdkError({ operation: "mcpStatus", cause }),
+    }).pipe(Effect.timeout(DEFAULT_TIMEOUT_MS));
+    let servers = yield* read;
+    for (
+      let poll = 0;
+      poll < MCP_STATUS_POLLS && servers.some((s) => s.status === "pending");
+      poll++
+    ) {
+      yield* Effect.sleep(MCP_STATUS_POLL_INTERVAL);
+      servers = yield* read;
+    }
+    return servers.map(toProviderMcpServerStatus);
+  }).pipe(
+    Effect.timeout(
+      resolveProviderProbeTimeoutMs("claude", CAPABILITIES_PROBE_TIMEOUT_MS, environment),
+    ),
+    Effect.ensuring(abortProbe),
+  );
+};
 
 const runClaudeCommand = Effect.fn("runClaudeCommand")(function* (
   claudeSettings: ClaudeSettings,

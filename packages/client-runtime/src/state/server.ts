@@ -1540,6 +1540,12 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:trace-diagnostics",
       tag: WS_METHODS.serverGetTraceDiagnostics,
     }),
+    // Each read can start the provider and its MCP servers, so it runs only when asked.
+    providerMcpStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:provider:mcp-status",
+      tag: WS_METHODS.providerMcpStatus,
+      staleTimeMs: 30_000,
+    }),
     npmRelease: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:npm-release",
       tag: WS_METHODS.serverGetNpmRelease,
