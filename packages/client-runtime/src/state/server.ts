@@ -1544,7 +1544,9 @@ export function createServerEnvironmentAtoms<R, E>(
     providerMcpStatus: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:provider:mcp-status",
       tag: WS_METHODS.providerMcpStatus,
-      staleTimeMs: 30_000,
+      // Kept for the session: rechecking is a click, not a remount.
+      staleTimeMs: 30 * 60_000,
+      idleTtlMs: 30 * 60_000,
     }),
     npmRelease: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:npm-release",

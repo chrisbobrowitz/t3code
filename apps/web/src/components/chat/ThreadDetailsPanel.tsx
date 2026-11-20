@@ -40,6 +40,7 @@ import { ThreadDetailsThreadPrRows } from "./ThreadDetailsPrRows";
 import { cn } from "../../lib/utils";
 import { SlidersHorizontalIcon } from "lucide-react";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
+import { ThreadMcpServersPanel } from "./ThreadMcpServersPanel";
 import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
   THREAD_DETAILS_PANEL_LABEL_CLASS,
@@ -266,6 +267,14 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
 
               {density === "full" && !props.draftId && visible.servers ? (
                 <ThreadServersPanel environmentId={props.environmentId} threadId={props.threadId} />
+              ) : null}
+
+              {density === "full" && visible.mcp && props.usage.providerInstanceId ? (
+                <ThreadMcpServersPanel
+                  environmentId={props.environmentId}
+                  providerInstanceId={props.usage.providerInstanceId}
+                  cwd={props.gitCwd}
+                />
               ) : null}
 
               {density === "full" && !props.draftId && visible.automations ? (

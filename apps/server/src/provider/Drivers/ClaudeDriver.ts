@@ -408,10 +408,10 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
       ),
     );
 
-    // User-level servers only: from the home directory no project `.mcp.json` applies.
+    // From the home directory no project `.mcp.json` applies, so only user-level servers show.
     const homeDirectory = yield* HostProcess.HomeDirectory;
-    const mcpStatus = () =>
-      probeClaudeMcpStatus(effectiveConfig, processEnv, homeDirectory).pipe(
+    const mcpStatus = (cwd: string | undefined) =>
+      probeClaudeMcpStatus(effectiveConfig, processEnv, cwd ?? homeDirectory).pipe(
         Effect.provideService(FileSystem.FileSystem, fileSystem),
         Effect.provideService(Path.Path, path),
         Effect.mapError(

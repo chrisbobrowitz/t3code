@@ -3,11 +3,13 @@ import { useGT } from "gt-react";
 import { CoffeeIcon } from "lucide-react";
 import type { MouseEvent } from "react";
 
-import {
-  usePrimarySettings,
-  usePrimarySettingsAvailable,
-  useUpdatePrimarySettings,
-} from "../../hooks/useSettings";
+import { useAtomValue } from "@effect/atom-react";
+import type { ServerSettings } from "@t3tools/contracts";
+import { Atom } from "effect/reactivity";
+
+import { useUpdateEnvironmentSettings } from "../../hooks/useSettings";
+import { localEnvironmentIdAtom } from "../../state/primaryEnvironment";
+import { serverEnvironment } from "../../state/server";
 import { cn } from "../../lib/utils";
 import { ITEM_ICON_CLASS, type CommandPaletteActionItem } from "../CommandPalette.logic";
 import { SidebarMenuButton, SidebarMenuItem } from "../ui/sidebar";
@@ -19,13 +21,19 @@ function nextKeepAwakeHold(now: KeepAwakeHold, button: "left" | "right"): KeepAw
   return button === "left" ? "on" : "agents";
 }
 
+const noSettingsAtom = Atom.make<ServerSettings | null>(null);
+
+// This computer's server: the desktop app's own, or the background service it connects to.
 function useKeepAwake() {
-  const hold = usePrimarySettings((settings) => settings.keepAwakeHold);
-  const available = usePrimarySettingsAvailable();
-  const updateSettings = useUpdatePrimarySettings();
+  const environmentId = useAtomValue(localEnvironmentIdAtom);
+  const settings = useAtomValue(
+    environmentId ? serverEnvironment.settingsValueAtom(environmentId) : noSettingsAtom,
+  );
+  const hold = settings?.keepAwakeHold ?? "off";
+  const updateSettings = useUpdateEnvironmentSettings(environmentId);
   const press = (button: "left" | "right") =>
     updateSettings({ keepAwakeHold: nextKeepAwakeHold(hold, button) });
-  return { hold, available, press };
+  return { hold, available: environmentId !== null && settings !== null, press };
 }
 
 export function KeepAwakeCup() {

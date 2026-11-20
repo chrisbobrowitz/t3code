@@ -22,6 +22,8 @@ export type ProviderMcpServerStatus = typeof ProviderMcpServerStatus.Type;
 
 export const ProviderMcpStatusInput = Schema.Struct({
   instanceId: ProviderInstanceId,
+  /** A project folder adds its project-level servers; without one only user-level servers show. */
+  cwd: Schema.optional(Schema.String),
 });
 export type ProviderMcpStatusInput = typeof ProviderMcpStatusInput.Type;
 

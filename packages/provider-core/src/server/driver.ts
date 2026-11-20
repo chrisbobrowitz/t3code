@@ -62,11 +62,10 @@ export interface ProviderInstance {
   readonly consumeResetCredit?: (
     creditId: string | undefined,
   ) => Effect.Effect<ProviderConsumeResetCreditOutcome, ProviderDriverError>;
-  /** The MCP servers the provider loads for the user, read on demand. */
-  readonly mcpStatus?: () => Effect.Effect<
-    ReadonlyArray<ProviderMcpServerStatus>,
-    ProviderDriverError
-  >;
+  /** The MCP servers the provider loads in `cwd` (default: the home directory), read on demand. */
+  readonly mcpStatus?: (
+    cwd: string | undefined,
+  ) => Effect.Effect<ReadonlyArray<ProviderMcpServerStatus>, ProviderDriverError>;
   readonly orchestrationAdapter: ProviderAdapter.ProviderAdapterV2["Service"];
   readonly textGeneration: ProviderTextGeneration;
   readonly auth?: ProviderAuthController;

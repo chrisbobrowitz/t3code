@@ -2674,7 +2674,7 @@ export const layerWsRpc = (
           }
           if (instance.mcpStatus === undefined) return { supported: false as const };
           // The cause can carry headers and URLs, so it stays in the server log.
-          const servers = yield* instance.mcpStatus().pipe(
+          const servers = yield* instance.mcpStatus(input.cwd).pipe(
             Effect.tapError((error) =>
               Effect.logWarning("provider MCP status failed", { cause: error }),
             ),

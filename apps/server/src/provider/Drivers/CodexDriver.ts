@@ -419,17 +419,17 @@ export const CodexDriver: ProviderDriver<
         Effect.forkScoped,
       );
     }
-    // User-level servers only: from the home directory no project config.toml applies.
-    const mcpDirectory = yield* HostProcess.HomeDirectory;
+    // From the home directory no project config.toml applies, so only user-level servers show.
+    const homeDirectory = yield* HostProcess.HomeDirectory;
     const mcpStatus: NonNullable<ProviderInstance["mcpStatus"]> = Effect.fn(
       "CodexDriver.mcpStatus",
     )(
-      function* () {
+      function* (cwd: string | undefined) {
         const { client } = yield* withCodexAppServerClient({
           binaryPath: effectiveConfig.binaryPath,
           homePath: effectiveConfig.homePath,
           launchArgs: resolveCodexLaunchArgs(effectiveConfig.launchArgs, processEnv),
-          cwd: mcpDirectory,
+          cwd: cwd ?? homeDirectory,
           environment: processEnv,
         });
         const servers: Array<ProviderMcpServerStatus> = [];

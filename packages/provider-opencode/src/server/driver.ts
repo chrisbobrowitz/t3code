@@ -619,53 +619,57 @@ export const OpenCodeDriver: ProviderDriver<
             ),
           );
 
-    // User-level servers only: from the home directory no project config applies.
-    const mcpDirectory = yield* HostProcess.HomeDirectory;
-    const readOpenCodeV1McpStatus = Effect.scoped(
-      Effect.gen(function* () {
-        const password = effectiveConfig.serverPassword
-          ? { serverPassword: effectiveConfig.serverPassword }
-          : {};
-        const read = (baseUrl: string, serverPassword: string | undefined) =>
-          OpenCodeRuntime.runOpenCodeSdk("mcp.status", (signal) =>
-            openCodeRuntime
-              .createOpenCodeSdkClient({
-                baseUrl,
-                directory: mcpDirectory,
-                ...(serverPassword !== undefined ? { serverPassword } : {}),
-              })
-              .mcp.status(undefined, { signal, throwOnError: true }),
-          ).pipe(
-            Effect.map((response) =>
-              toProviderMcpServerStatuses(Object.entries(response.data ?? {})),
+    // From the home directory no project config applies, so only user-level servers show.
+    const homeDirectory = yield* HostProcess.HomeDirectory;
+    const readOpenCodeV1McpStatus = (mcpDirectory: string) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const password = effectiveConfig.serverPassword
+            ? { serverPassword: effectiveConfig.serverPassword }
+            : {};
+          const read = (baseUrl: string, serverPassword: string | undefined) =>
+            OpenCodeRuntime.runOpenCodeSdk("mcp.status", (signal) =>
+              openCodeRuntime
+                .createOpenCodeSdkClient({
+                  baseUrl,
+                  directory: mcpDirectory,
+                  ...(serverPassword !== undefined ? { serverPassword } : {}),
+                })
+                .mcp.status(undefined, { signal, throwOnError: true }),
+            ).pipe(
+              Effect.map((response) =>
+                toProviderMcpServerStatuses(Object.entries(response.data ?? {})),
+              ),
+            );
+          if (effectiveConfig.serverUrl.trim().length === 0) {
+            return yield* serverOwner.withServer((server) =>
+              read(server.url, server.serverPassword),
+            );
+          }
+          const server = yield* openCodeRuntime.connectToOpenCodeServer({
+            binaryPath: effectiveConfig.binaryPath,
+            directory: mcpDirectory,
+            serverUrl: effectiveConfig.serverUrl,
+            ...password,
+            environment: processEnv,
+          });
+          return yield* read(server.url, effectiveConfig.serverPassword || undefined);
+        }),
+      );
+    const readOpenCodeV2McpStatus = (mcpDirectory: string) =>
+      openCode2Server.withConnection(({ client, external }) =>
+        client.mcp
+          .list(external ? undefined : { location: { directory: mcpDirectory } })
+          .pipe(
+            Effect.map((list) =>
+              toProviderMcpServerStatuses(list.data.map((server) => [server.name, server.status])),
             ),
-          );
-        if (effectiveConfig.serverUrl.trim().length === 0) {
-          return yield* serverOwner.withServer((server) => read(server.url, server.serverPassword));
-        }
-        const server = yield* openCodeRuntime.connectToOpenCodeServer({
-          binaryPath: effectiveConfig.binaryPath,
-          directory: mcpDirectory,
-          serverUrl: effectiveConfig.serverUrl,
-          ...password,
-          environment: processEnv,
-        });
-        return yield* read(server.url, effectiveConfig.serverPassword || undefined);
-      }),
-    );
-    const readOpenCodeV2McpStatus = openCode2Server.withConnection(({ client, external }) =>
-      client.mcp
-        .list(external ? undefined : { location: { directory: mcpDirectory } })
-        .pipe(
-          Effect.map((list) =>
-            toProviderMcpServerStatuses(list.data.map((server) => [server.name, server.status])),
           ),
-        ),
-    );
-    const mcpStatus = () =>
+      );
+    const mcpStatus = (cwd: string | undefined) =>
       byOpenCodeRuntime(runtimeProbe.get, {
-        v1: readOpenCodeV1McpStatus,
-        v2: readOpenCodeV2McpStatus,
+        v1: readOpenCodeV1McpStatus(cwd ?? homeDirectory),
+        v2: readOpenCodeV2McpStatus(cwd ?? homeDirectory),
       }).pipe(
         Effect.timeout(resolveProviderProbeTimeoutMs("opencode", 10_000, processEnv)),
         Effect.mapError(

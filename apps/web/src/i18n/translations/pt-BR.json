@@ -12213,5 +12213,9 @@
   "79e4d73c1bc8cf45": "Checking",
   "cf719233a04fe23e": "Check",
   "a34eb3a42e778e50": "This provider does not report its MCP servers.",
-  "c2a10e240668feb4": "This provider loads no MCP servers."
+  "c2a10e240668feb4": "This provider loads no MCP servers.",
+  "4c8cb0ff7c89b20c": "Check MCP servers again",
+  "3fa483834c1178ce": "Check MCP servers",
+  "677ba94f55611db4": "Check MCP servers",
+  "0b297f8f58f250a8": "Checking MCP servers…"
 }

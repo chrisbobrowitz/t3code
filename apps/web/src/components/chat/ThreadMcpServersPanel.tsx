@@ -1,0 +1,156 @@
+import {
+  AuthProvidersManageScope,
+  type EnvironmentId,
+  type ProviderInstanceId,
+  type ProviderMcpServerState,
+} from "@t3tools/contracts";
+import { T, useGT, useMessages } from "gt-react";
+import { PlugIcon, RefreshCwIcon } from "lucide-react";
+
+import { cn } from "../../lib/utils";
+import { useEnvironmentScope } from "../../state/session";
+import {
+  MCP_STATE_BADGE,
+  sortMcpServers,
+  useProviderMcpStatus,
+} from "../settings/providerMcpStatus";
+import { Spinner } from "../ui/spinner";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { ThreadDetailsControl } from "./ThreadDetailsControl";
+import { ThreadDetailsSection } from "./ThreadDetailsSection";
+import {
+  THREAD_DETAILS_PANEL_ICON_CLASS,
+  THREAD_DETAILS_PANEL_LABEL_CLASS,
+  THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
+} from "./threadDetailsPanelStyles";
+
+const STATE_DOT_CLASS: Record<ProviderMcpServerState, string> = {
+  connected: "bg-emerald-500",
+  needsAuth: "bg-amber-500",
+  failed: "bg-destructive",
+  disabled: "bg-muted-foreground/40",
+  pending: "bg-sky-500",
+};
+
+interface ThreadMcpServersPanelProps {
+  readonly environmentId: EnvironmentId;
+  readonly providerInstanceId: ProviderInstanceId;
+  /** The project folder, so project-level servers show too. */
+  readonly cwd: string | null;
+}
+
+/** The MCP servers the thread's provider loads in this project, checked on demand. */
+export function ThreadMcpServersPanel(props: ThreadMcpServersPanelProps) {
+  const gt = useGT();
+  const messages = useMessages();
+  const canCheck = useEnvironmentScope(props.environmentId, AuthProvidersManageScope);
+  const { query, requested, check } = useProviderMcpStatus({
+    environmentId: props.environmentId,
+    instanceId: props.providerInstanceId,
+    cwd: props.cwd ?? undefined,
+  });
+  const result = query.data;
+  const checkLabel = requested ? gt("Check MCP servers again") : gt("Check MCP servers");
+
+  return (
+    <ThreadDetailsSection
+      headingId="thread-details-mcp-heading"
+      title={gt("MCP servers")}
+      data-thread-mcp-panel
+      actions={
+        requested ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <ThreadDetailsControl
+                  size="icon-xs"
+                  variant="ghost"
+                  part="icon"
+                  aria-label={checkLabel}
+                  disabled={!canCheck || query.isPending}
+                  onClick={check}
+                >
+                  {query.isPending ? (
+                    <Spinner className="size-3.5" />
+                  ) : (
+                    <RefreshCwIcon className="size-3.5" />
+                  )}
+                </ThreadDetailsControl>
+              }
+            />
+            <TooltipPopup>{checkLabel}</TooltipPopup>
+          </Tooltip>
+        ) : null
+      }
+    >
+      <div>
+        {!requested ? (
+          <ThreadDetailsControl
+            size="sm"
+            variant="ghost"
+            part="row"
+            disabled={!canCheck}
+            onClick={check}
+          >
+            <PlugIcon aria-hidden className={THREAD_DETAILS_PANEL_ICON_CLASS} />
+            <span className={cn("ml-0.5", THREAD_DETAILS_PANEL_LABEL_CLASS)}>
+              <T>Check MCP servers</T>
+            </span>
+          </ThreadDetailsControl>
+        ) : query.error ? (
+          <p className="px-2.5 py-1.5 text-xs text-destructive-foreground">{query.error}</p>
+        ) : result === null ? (
+          <p className="px-2.5 py-1.5 text-xs text-muted-foreground">
+            <T>Checking MCP servers…</T>
+          </p>
+        ) : !result.supported ? (
+          <p className="px-2.5 py-1.5 text-xs text-muted-foreground">
+            {gt("This provider does not report its MCP servers.")}
+          </p>
+        ) : result.servers.length === 0 ? (
+          <p className="px-2.5 py-1.5 text-xs text-muted-foreground">
+            {gt("This provider loads no MCP servers.")}
+          </p>
+        ) : (
+          <ul className="m-0 max-h-[13.5rem] list-none overflow-y-auto p-0">
+            {sortMcpServers(result.servers).map((server) => (
+              <li
+                key={`${server.scope ?? ""}:${server.name}`}
+                className={cn(
+                  "flex items-center rounded-lg py-1.5",
+                  THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
+                )}
+              >
+                <span
+                  aria-hidden
+                  className={cn("size-2 shrink-0 rounded-full", STATE_DOT_CLASS[server.state])}
+                />
+                <Tooltip>
+                  <TooltipTrigger render={<div className="min-w-0 flex-1" />}>
+                    <span className="block truncate text-sm font-medium text-foreground/80">
+                      {server.name}
+                    </span>
+                    <p className="truncate text-2xs text-muted-foreground">
+                      {[messages(MCP_STATE_BADGE[server.state].label), server.scope]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </TooltipTrigger>
+                  <TooltipPopup side="left">
+                    <p className="font-medium">{server.name}</p>
+                    <p className="text-muted-foreground">
+                      {messages(MCP_STATE_BADGE[server.state].label)}
+                    </p>
+                    {server.detail ? (
+                      <p className="max-w-xs break-words text-muted-foreground">{server.detail}</p>
+                    ) : null}
+                  </TooltipPopup>
+                </Tooltip>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </ThreadDetailsSection>
+  );
+}
