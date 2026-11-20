@@ -44,7 +44,7 @@ export function ThreadMcpServersPanel(props: ThreadMcpServersPanelProps) {
   const gt = useGT();
   const messages = useMessages();
   const canCheck = useEnvironmentScope(props.environmentId, AuthProvidersManageScope);
-  const { query, requested, check } = useProviderMcpStatus({
+  const { query, requested, check, signIn, signingIn } = useProviderMcpStatus({
     environmentId: props.environmentId,
     instanceId: props.providerInstanceId,
     cwd: props.cwd ?? undefined,
@@ -113,41 +113,73 @@ export function ThreadMcpServersPanel(props: ThreadMcpServersPanelProps) {
           </p>
         ) : (
           <ul className="m-0 max-h-[13.5rem] list-none overflow-y-auto p-0">
-            {sortMcpServers(result.servers).map((server) => (
-              <li
-                key={`${server.scope ?? ""}:${server.name}`}
-                className={cn(
-                  "flex items-center rounded-lg py-1.5",
-                  THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
-                )}
-              >
-                <span
-                  aria-hidden
-                  className={cn("size-2 shrink-0 rounded-full", STATE_DOT_CLASS[server.state])}
-                />
-                <Tooltip>
-                  <TooltipTrigger render={<div className="min-w-0 flex-1" />}>
+            {sortMcpServers(result.servers).map((server) => {
+              const canSignIn = server.state === "needsAuth" && canCheck;
+              const status = [messages(MCP_STATE_BADGE[server.state].label), server.scope]
+                .filter(Boolean)
+                .join(" · ");
+              const body = (
+                <>
+                  {signingIn === server.name ? (
+                    <Spinner className="size-2 shrink-0" />
+                  ) : (
+                    <span
+                      aria-hidden
+                      className={cn("size-2 shrink-0 rounded-full", STATE_DOT_CLASS[server.state])}
+                    />
+                  )}
+                  <span className="flex min-w-0 flex-1 flex-col text-left">
                     <span className="block truncate text-sm font-medium text-foreground/80">
                       {server.name}
                     </span>
-                    <p className="truncate text-2xs text-muted-foreground">
-                      {[messages(MCP_STATE_BADGE[server.state].label), server.scope]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  </TooltipTrigger>
-                  <TooltipPopup side="left">
-                    <p className="font-medium">{server.name}</p>
-                    <p className="text-muted-foreground">
-                      {messages(MCP_STATE_BADGE[server.state].label)}
-                    </p>
-                    {server.detail ? (
-                      <p className="max-w-xs break-words text-muted-foreground">{server.detail}</p>
-                    ) : null}
-                  </TooltipPopup>
-                </Tooltip>
-              </li>
-            ))}
+                    <span className="truncate text-2xs font-normal text-muted-foreground">
+                      {status}
+                    </span>
+                  </span>
+                </>
+              );
+              return (
+                <li key={`${server.scope ?? ""}:${server.name}`} className="flex rounded-lg">
+                  <Tooltip>
+                    <TooltipTrigger
+                      delay={200}
+                      render={
+                        canSignIn ? (
+                          <ThreadDetailsControl
+                            size="sm"
+                            variant="ghost"
+                            part="row"
+                            multiline
+                            disabled={signingIn !== null}
+                            onClick={() => void signIn(server.name)}
+                          />
+                        ) : (
+                          <div
+                            className={cn(
+                              "flex w-full min-w-0 items-center rounded-lg py-1.5",
+                              THREAD_DETAILS_PANEL_ROW_CONTENT_CLASS,
+                            )}
+                          />
+                        )
+                      }
+                    >
+                      {body}
+                    </TooltipTrigger>
+                    <TooltipPopup side="left">
+                      <p className="font-medium">{server.name}</p>
+                      <p className="text-muted-foreground">
+                        {canSignIn ? gt("Click to sign in") : status}
+                      </p>
+                      {server.detail ? (
+                        <p className="max-w-xs break-words text-muted-foreground">
+                          {server.detail}
+                        </p>
+                      ) : null}
+                    </TooltipPopup>
+                  </Tooltip>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

@@ -1655,6 +1655,10 @@ export function createServerEnvironmentAtoms<R, E>(
           ),
         ),
     }),
+    providerMcpLogin: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:provider:mcp-login",
+      tag: WS_METHODS.providerMcpLogin,
+    }),
     consumeResetCredit: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:consume-reset-credit",
       tag: WS_METHODS.providerConsumeResetCredit,

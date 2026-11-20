@@ -12,6 +12,7 @@ import * as Effect from "effect/Effect";
 import * as DateTime from "effect/DateTime";
 import * as Equal from "effect/Equal";
 import * as Option from "effect/Option";
+import * as Schedule from "effect/Schedule";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
@@ -85,6 +86,15 @@ import {
 const decodeOpenCodeSettings = Schema.decodeSync(OpenCodeSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("opencode");
+
+class OpenCodeMcpLoginError extends Schema.TaggedError<OpenCodeMcpLoginError>()(
+  "OpenCodeMcpLoginError",
+  { detail: Schema.String, cause: Schema.optional(Schema.Defect()) },
+) {
+  override get message(): string {
+    return this.detail;
+  }
+}
 
 // A loopback server runs on this environment, but can outlive its CLI installation.
 // Its reported version may therefore differ from the installed executable after an update.
@@ -683,6 +693,97 @@ export const OpenCodeDriver: ProviderDriver<
         ),
       );
 
+    // OpenCode listens for the browser's redirect itself; the connection stays leased until
+    // the attempt ends, so an owned server does not idle out mid sign-in.
+    const instanceScope = yield* Effect.scope;
+    const startOpenCodeV2McpLogin = Effect.fn("OpenCodeDriver.mcpLogin")(function* (
+      server: string,
+      directory: string,
+    ) {
+      const authorizationUrl = yield* Deferred.make<string, OpenCodeMcpLoginError>();
+      yield* openCode2Server
+        .withConnection(({ client, external }) =>
+          Effect.gen(function* () {
+            const location = external ? {} : { location: { directory } };
+            const listed = (yield* client.mcp.list(location)).data.find(
+              (entry) => entry.name === server,
+            );
+            if (!listed?.integrationID) {
+              return yield* new OpenCodeMcpLoginError({
+                detail: `OpenCode has no sign-in for '${server}'.`,
+              });
+            }
+            const integrationID = listed.integrationID;
+            const integration = yield* client.integration.get({ integrationID, ...location });
+            const method = integration.data.methods.find((entry) => entry.type === "oauth");
+            if (!method) {
+              return yield* new OpenCodeMcpLoginError({
+                detail: `OpenCode has no browser sign-in for '${server}'.`,
+              });
+            }
+            const attempt = (yield* client.integration.oauth.connect({
+              integrationID,
+              methodID: method.id,
+              ...location,
+            })).data;
+            yield* Deferred.succeed(authorizationUrl, attempt.url);
+            yield* client.integration.oauth
+              .status({ integrationID, attemptID: attempt.attemptID, ...location })
+              .pipe(
+                Effect.map((status) => status.data.status),
+                Effect.repeat({
+                  schedule: Schedule.spaced("1 second"),
+                  while: (status) => status === "pending",
+                }),
+                Effect.timeoutOption("5 minutes"),
+              );
+            yield* client.mcp.connect({ server, ...location }).pipe(Effect.ignore);
+          }),
+        )
+        .pipe(
+          Effect.timeout("6 minutes"),
+          Effect.tapCause((cause) =>
+            Deferred.fail(
+              authorizationUrl,
+              new OpenCodeMcpLoginError({ detail: "OpenCode sign-in failed.", cause }),
+            ),
+          ),
+          Effect.ignoreCause({ log: true }),
+          Effect.forkIn(instanceScope),
+        );
+      // The worker fails the deferred on error, but a hung request before the URL would not.
+      return {
+        authorizationUrl: yield* Deferred.await(authorizationUrl).pipe(
+          Effect.timeoutOrElse({
+            duration: "45 seconds",
+            orElse: () =>
+              Effect.fail(
+                new OpenCodeMcpLoginError({ detail: "OpenCode did not start sign-in in time." }),
+              ),
+          }),
+        ),
+      };
+    });
+    const mcpLogin = (server: string, cwd: string | undefined) =>
+      byOpenCodeRuntime(runtimeProbe.get, {
+        v1: Effect.fail(
+          new OpenCodeMcpLoginError({
+            detail: `Sign in from a terminal with \`opencode mcp auth ${server}\`.`,
+          }),
+        ),
+        v2: startOpenCodeV2McpLogin(server, cwd ?? homeDirectory),
+      }).pipe(
+        Effect.mapError(
+          (cause) =>
+            new ProviderDriverError({
+              driver: DRIVER_KIND,
+              instanceId,
+              detail: cause.detail,
+              cause,
+            }),
+        ),
+      );
+
     const serverUrl = effectiveConfig.serverUrl.trim();
     const afterUpdate =
       serverUrl.length > 0
@@ -854,6 +955,7 @@ export const OpenCodeDriver: ProviderDriver<
       orchestrationAdapter,
       textGeneration,
       mcpStatus,
+      mcpLogin,
     } satisfies ProviderInstance;
   }),
 };

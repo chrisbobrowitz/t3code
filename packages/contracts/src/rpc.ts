@@ -33,7 +33,12 @@ import {
   ChatGptHandoffInput,
   ChatGptHandoffState,
 } from "./providerSetup.ts";
-import { ProviderMcpStatusInput, ProviderMcpStatusResult } from "./providerMcp.ts";
+import {
+  ProviderMcpLoginInput,
+  ProviderMcpLoginResult,
+  ProviderMcpStatusInput,
+  ProviderMcpStatusResult,
+} from "./providerMcp.ts";
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/rpc/Rpc";
 import * as RpcGroup from "effect/rpc/RpcGroup";
@@ -473,6 +478,7 @@ export const WS_METHODS = {
   providerAuthStart: "provider.auth.start",
   providerConsumeResetCredit: "provider.consumeResetCredit",
   providerMcpStatus: "provider.mcpStatus",
+  providerMcpLogin: "provider.mcpLogin",
   providerAuthComplete: "provider.auth.complete",
   chatGptReconnectProfile: "provider.chatgpt.reconnect-profile",
   chatGptImportProfile: "provider.chatgpt.import-profile",
@@ -755,6 +761,12 @@ const WsProviderConsumeResetCreditRpc = Rpc.make(WS_METHODS.providerConsumeReset
 const WsProviderMcpStatusRpc = Rpc.make(WS_METHODS.providerMcpStatus, {
   payload: ProviderMcpStatusInput,
   success: ProviderMcpStatusResult,
+  error: ProviderSetupRpcError,
+});
+
+const WsProviderMcpLoginRpc = Rpc.make(WS_METHODS.providerMcpLogin, {
+  payload: ProviderMcpLoginInput,
+  success: ProviderMcpLoginResult,
   error: ProviderSetupRpcError,
 });
 
@@ -2284,6 +2296,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerUpdateProviderRpc,
   WsProviderConsumeResetCreditRpc,
   WsProviderMcpStatusRpc,
+  WsProviderMcpLoginRpc,
   WsProviderAuthStartRpc,
   WsProviderAuthCompleteRpc,
   WsChatGptReconnectProfileRpc,

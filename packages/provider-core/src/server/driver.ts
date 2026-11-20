@@ -8,6 +8,7 @@ import type {
   ProviderDriverKind,
   ResolvedProviderInstanceEnvironment,
   ProviderInstanceId,
+  ProviderMcpLoginResult,
   ProviderMcpServerStatus,
   ServerProvider,
   ServerProviderWorkspaceSnapshot,
@@ -66,6 +67,14 @@ export interface ProviderInstance {
   readonly mcpStatus?: (
     cwd: string | undefined,
   ) => Effect.Effect<ReadonlyArray<ProviderMcpServerStatus>, ProviderDriverError>;
+  /**
+   * Starts sign-in to one MCP server and returns the URL the user opens. The provider keeps
+   * listening for the browser's redirect on this machine until sign-in ends or times out.
+   */
+  readonly mcpLogin?: (
+    server: string,
+    cwd: string | undefined,
+  ) => Effect.Effect<ProviderMcpLoginResult, ProviderDriverError>;
   readonly orchestrationAdapter: ProviderAdapter.ProviderAdapterV2["Service"];
   readonly textGeneration: ProviderTextGeneration;
   readonly auth?: ProviderAuthController;

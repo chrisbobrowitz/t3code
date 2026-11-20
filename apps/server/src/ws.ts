@@ -2696,6 +2696,33 @@ export const layerWsRpc = (
             ),
           };
         }),
+        [WS_METHODS.providerMcpLogin]: Effect.fnUntraced(function* (input) {
+          const instance = yield* providerInstances.getInstance(input.instanceId);
+          if (instance === undefined || !instance.enabled || instance.mcpLogin === undefined) {
+            return yield* new ProviderSetupError({
+              instanceId: input.instanceId,
+              operation: "mcp-login",
+              detail: !instance
+                ? "Provider instance not found."
+                : !instance.enabled
+                  ? "This provider is disabled."
+                  : "T3 Code cannot sign in to this provider's MCP servers. Use the provider's own CLI.",
+            });
+          }
+          return yield* instance.mcpLogin(input.server, input.cwd).pipe(
+            Effect.tapError((error) =>
+              Effect.logWarning("provider MCP sign-in failed", { cause: error }),
+            ),
+            Effect.mapError(
+              (error) =>
+                new ProviderSetupError({
+                  instanceId: input.instanceId,
+                  operation: "mcp-login",
+                  detail: redactProviderFailureText(error.detail),
+                }),
+            ),
+          );
+        }),
         [WS_METHODS.providerAuthStart]: (input) => providerAuth.start(input, currentSessionId),
         [WS_METHODS.providerAuthRespond]: (input) =>
           Effect.annotateCurrentSpan({ instanceId: input.instanceId }).pipe(

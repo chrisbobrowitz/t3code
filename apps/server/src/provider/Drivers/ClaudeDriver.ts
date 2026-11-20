@@ -34,6 +34,7 @@ import {
   makePendingClaudeProvider,
   probeClaudeCapabilities,
   probeClaudeMcpStatus,
+  startClaudeMcpLogin,
   probeClaudeWorkspaceSnapshot,
   type ClaudeCapabilitiesProbe,
 } from "../ClaudeProvider.ts";
@@ -67,6 +68,7 @@ import { makeClaudeMaintenanceResolution } from "./ClaudeMaintenance.ts";
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
+const MCP_LOGIN_TIMEOUT = "5 minutes";
 const CAPABILITIES_PROBE_TTL = Duration.minutes(5);
 
 const withoutUsage = (capabilities: ClaudeCapabilitiesProbe): ClaudeCapabilitiesProbe => {
@@ -425,6 +427,40 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
         ),
       );
 
+    // Each sign-in keeps its Claude process until the server connects or the deadline passes.
+    const instanceScope = yield* Effect.scope;
+    // Startup aborts Claude on any failure; once it returns, nothing may interrupt before
+    // `finish` owns the process.
+    const mcpLogin = (server: string, cwd: string | undefined) =>
+      Effect.uninterruptibleMask((restore) =>
+        restore(
+          startClaudeMcpLogin(effectiveConfig, processEnv, cwd ?? homeDirectory, server),
+        ).pipe(
+          Effect.tap(({ finish }) =>
+            finish.pipe(
+              Effect.timeout(MCP_LOGIN_TIMEOUT),
+              Effect.ignore,
+              Effect.provideService(FileSystem.FileSystem, fileSystem),
+              Effect.provideService(Path.Path, path),
+              Effect.forkIn(instanceScope),
+            ),
+          ),
+          Effect.map(({ authorizationUrl }) => ({ authorizationUrl })),
+        ),
+      ).pipe(
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provideService(Path.Path, path),
+        Effect.mapError(
+          (cause) =>
+            new ProviderDriverError({
+              driver: DRIVER_KIND,
+              instanceId,
+              detail: `Claude could not start sign-in to '${server}'.`,
+              cause,
+            }),
+        ),
+      );
+
     return {
       instanceId,
       driverKind: DRIVER_KIND,
@@ -450,6 +486,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv, Path.
       textGeneration,
       consumeResetCredit,
       mcpStatus,
+      mcpLogin,
     } satisfies ProviderInstance;
   }),
 };

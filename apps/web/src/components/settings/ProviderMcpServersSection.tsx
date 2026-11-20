@@ -15,7 +15,7 @@ export function ProviderMcpServersSection(props: {
   const gt = useGT();
   const messages = useMessages();
   const canCheck = useEnvironmentScope(props.environmentId, AuthProvidersManageScope);
-  const { query, requested, check } = useProviderMcpStatus(props);
+  const { query, requested, check, signIn, signingIn } = useProviderMcpStatus(props);
   const result = query.data;
 
   return (
@@ -72,6 +72,17 @@ export function ProviderMcpServersSection(props: {
                       <p className="text-xs break-words text-muted-foreground">{server.detail}</p>
                     ) : null}
                   </div>
+                  {server.state === "needsAuth" ? (
+                    <Button
+                      type="button"
+                      size="compact"
+                      variant="outline"
+                      disabled={!canCheck || signingIn !== null}
+                      onClick={() => void signIn(server.name)}
+                    >
+                      {signingIn === server.name ? gt("Signing in") : gt("Sign in")}
+                    </Button>
+                  ) : null}
                 </li>
               );
             })}

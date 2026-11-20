@@ -12227,5 +12227,10 @@
   "4c8cb0ff7c89b20c": "Check MCP servers again",
   "3fa483834c1178ce": "Check MCP servers",
   "677ba94f55611db4": "Check MCP servers",
-  "0b297f8f58f250a8": "Checking MCP servers…"
+  "0b297f8f58f250a8": "Checking MCP servers…",
+  "9f59821f367a52af": "Click to sign in",
+  "654a55642b6cc046": "Signing in",
+  "e15e21fe5cd787a4": "Could not sign in to {server}",
+  "feca63f080c8babb": "Finish signing in to {server} in your browser",
+  "bc2c9dfcbe308b6b": "T3 Code checks again when you come back."
 }

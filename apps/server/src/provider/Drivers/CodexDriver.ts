@@ -8,11 +8,14 @@ import * as Digest from "effect/crypto/Digest";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import type * as Signature from "effect/crypto/Signature";
 import * as Duration from "effect/Duration";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { ChildProcessSpawner } from "effect/process";
@@ -461,6 +464,69 @@ export const CodexDriver: ProviderDriver<
         ),
     );
 
+    // App-server listens for the browser's redirect itself, so it stays up until sign-in ends.
+    const instanceScope = yield* Effect.scope;
+    const mcpLogin: NonNullable<ProviderInstance["mcpLogin"]> = Effect.fn("CodexDriver.mcpLogin")(
+      function* (server, cwd) {
+        const completed = yield* Deferred.make<void>();
+        const processScope = yield* Scope.make();
+        const closeProcess = Scope.close(processScope, Exit.void);
+        const { client } = yield* withCodexAppServerClient({
+          binaryPath: effectiveConfig.binaryPath,
+          homePath: effectiveConfig.homePath,
+          launchArgs: resolveCodexLaunchArgs(effectiveConfig.launchArgs, processEnv),
+          cwd: cwd ?? homeDirectory,
+          environment: processEnv,
+        }).pipe(
+          Scope.provide(processScope),
+          Effect.onError(() => closeProcess),
+        );
+        // Nothing may interrupt between the request answering and the waiter owning the process.
+        return yield* Effect.uninterruptibleMask((restore) =>
+          restore(
+            client
+              // Registered before the request, so a fast completion is not missed.
+              .handleServerNotification("mcpServer/oauthLogin/completed", (event) =>
+                event.name === server
+                  ? Deferred.succeed(completed, undefined).pipe(Effect.asVoid)
+                  : Effect.void,
+              )
+              .pipe(
+                Effect.andThen(
+                  client.request("mcpServer/oauth/login", { name: server, timeoutSecs: 300 }),
+                ),
+              ),
+          ).pipe(
+            Effect.onError(() => closeProcess),
+            Effect.tap(() =>
+              Deferred.await(completed).pipe(
+                Effect.raceFirst(client.awaitTermination),
+                Effect.timeoutOption("5 minutes"),
+                Effect.ignoreCause({ log: true }),
+                Effect.ensuring(closeProcess),
+                Effect.forkIn(instanceScope),
+              ),
+            ),
+            Effect.map(({ authorizationUrl }) => ({ authorizationUrl })),
+          ),
+        );
+      },
+      (effect, server) =>
+        effect.pipe(
+          Effect.timeout("45 seconds"),
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+          Effect.mapError(
+            (cause) =>
+              new ProviderDriverError({
+                driver: DRIVER_KIND,
+                instanceId,
+                detail: `Codex could not start sign-in to '${server}'.`,
+                cause,
+              }),
+          ),
+        ),
+    );
+
     return {
       instanceId,
       driverKind: DRIVER_KIND,
@@ -472,6 +538,7 @@ export const CodexDriver: ProviderDriver<
       snapshotForCwd,
       consumeResetCredit,
       mcpStatus,
+      mcpLogin,
       orchestrationAdapter,
       textGeneration,
     } satisfies ProviderInstance;

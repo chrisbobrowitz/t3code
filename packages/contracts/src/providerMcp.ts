@@ -35,3 +35,16 @@ export const ProviderMcpStatusResult = Schema.Union([
   Schema.Struct({ supported: Schema.Literal(false) }),
 ]);
 export type ProviderMcpStatusResult = typeof ProviderMcpStatusResult.Type;
+
+export const ProviderMcpLoginInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  server: Schema.String,
+  cwd: Schema.optional(Schema.String),
+});
+export type ProviderMcpLoginInput = typeof ProviderMcpLoginInput.Type;
+
+/** `authorizationUrl` is null when the provider signed in without the user, or needs none. */
+export const ProviderMcpLoginResult = Schema.Struct({
+  authorizationUrl: Schema.NullOr(Schema.String),
+});
+export type ProviderMcpLoginResult = typeof ProviderMcpLoginResult.Type;
