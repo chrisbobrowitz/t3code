@@ -12230,5 +12230,11 @@
   "654a55642b6cc046": "Signing in",
   "e15e21fe5cd787a4": "Could not sign in to {server}",
   "feca63f080c8babb": "Finish signing in to {server} in your browser",
-  "bc2c9dfcbe308b6b": "T3 Code checks again when you come back."
+  "bc2c9dfcbe308b6b": "T3 Code checks again when you come back.",
+  "9af286baa6df13cb": "Show MCP servers",
+  "cd3cc92ad6752312": "Hide MCP servers",
+  "10af4832998486f6": "No MCP servers",
+  "468114b76c754d96": "{count, plural, =1 {1 server, all connected} other {{count} servers, all connected}}",
+  "d82323f355555fa3": "{count, plural, =1 {1 needs sign-in} other {{count} need sign-in}}",
+  "a599ee0f9b4b2243": "{count, plural, =1 {1 failed} other {{count} failed}}"
 }

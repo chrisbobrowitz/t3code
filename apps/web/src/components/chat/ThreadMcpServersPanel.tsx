@@ -5,7 +5,10 @@ import {
   type ProviderMcpServerState,
 } from "@t3tools/contracts";
 import { T, useGT, useMessages } from "gt-react";
-import { PlugIcon, RefreshCwIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon, PlugIcon, RefreshCwIcon } from "lucide-react";
+import * as Schema from "effect/Schema";
+
+import { useLocalStorage } from "../../hooks/useLocalStorage";
 
 import { cn } from "../../lib/utils";
 import { useEnvironmentScope } from "../../state/session";
@@ -50,6 +53,15 @@ export function ThreadMcpServersPanel(props: ThreadMcpServersPanelProps) {
     cwd: props.cwd ?? undefined,
   });
   const result = query.data;
+  const [collapsed, setCollapsed] = useLocalStorage(
+    "t3code:thread-details-mcp-collapsed",
+    false,
+    Schema.Boolean,
+  );
+  const collapseLabel = collapsed ? gt("Show MCP servers") : gt("Hide MCP servers");
+  const servers = result?.supported ? result.servers : [];
+  const needsAuthCount = servers.filter((server) => server.state === "needsAuth").length;
+  const failedCount = servers.filter((server) => server.state === "failed").length;
   const checkLabel = requested ? gt("Check MCP servers again") : gt("Check MCP servers");
 
   return (
@@ -58,7 +70,30 @@ export function ThreadMcpServersPanel(props: ThreadMcpServersPanelProps) {
       title={gt("MCP servers")}
       data-thread-mcp-panel
       actions={
-        requested ? (
+        <span className="flex items-center gap-0.5">
+          {requested ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <ThreadDetailsControl
+                    size="icon-xs"
+                    variant="ghost"
+                    part="icon"
+                    aria-label={checkLabel}
+                    disabled={!canCheck || query.isPending}
+                    onClick={check}
+                  >
+                    {query.isPending ? (
+                      <Spinner className="size-3.5" />
+                    ) : (
+                      <RefreshCwIcon className="size-3.5" />
+                    )}
+                  </ThreadDetailsControl>
+                }
+              />
+              <TooltipPopup>{checkLabel}</TooltipPopup>
+            </Tooltip>
+          ) : null}
           <Tooltip>
             <TooltipTrigger
               render={
@@ -66,25 +101,57 @@ export function ThreadMcpServersPanel(props: ThreadMcpServersPanelProps) {
                   size="icon-xs"
                   variant="ghost"
                   part="icon"
-                  aria-label={checkLabel}
-                  disabled={!canCheck || query.isPending}
-                  onClick={check}
+                  aria-label={collapseLabel}
+                  aria-expanded={!collapsed}
+                  onClick={() => setCollapsed(!collapsed)}
                 >
-                  {query.isPending ? (
-                    <Spinner className="size-3.5" />
+                  {collapsed ? (
+                    <ChevronRightIcon className="size-3.5" />
                   ) : (
-                    <RefreshCwIcon className="size-3.5" />
+                    <ChevronDownIcon className="size-3.5" />
                   )}
                 </ThreadDetailsControl>
               }
             />
-            <TooltipPopup>{checkLabel}</TooltipPopup>
+            <TooltipPopup>{collapseLabel}</TooltipPopup>
           </Tooltip>
-        ) : null
+        </span>
       }
     >
       <div>
-        {!requested ? (
+        {collapsed ? (
+          <button
+            type="button"
+            className="w-full px-2.5 py-1 text-left text-2xs text-muted-foreground hover:text-foreground"
+            onClick={() => setCollapsed(false)}
+          >
+            {!requested || result === null
+              ? collapseLabel
+              : servers.length === 0
+                ? gt("No MCP servers")
+                : needsAuthCount + failedCount === 0
+                  ? gt(
+                      "{count, plural, =1 {1 server, all connected} other {{count} servers, all connected}}",
+                      {
+                        count: servers.length,
+                      },
+                    )
+                  : [
+                      needsAuthCount > 0
+                        ? gt("{count, plural, =1 {1 needs sign-in} other {{count} need sign-in}}", {
+                            count: needsAuthCount,
+                          })
+                        : null,
+                      failedCount > 0
+                        ? gt("{count, plural, =1 {1 failed} other {{count} failed}}", {
+                            count: failedCount,
+                          })
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+          </button>
+        ) : !requested ? (
           <ThreadDetailsControl
             size="sm"
             variant="ghost"
