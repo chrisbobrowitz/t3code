@@ -160,6 +160,12 @@ Pinned threads stay above the folders, and Snoozed and Settled stay below them. 
 can drag a thread onto the composer to mention it, but not within the sidebar, and the Working
 section is off. Each device keeps its own choice.
 
+### Awaiting reply
+
+On web and desktop, a thread whose last turn finished shows **Done** until you open it. After you
+open it, it shows **Awaiting reply** until you send another message. To clear it without replying,
+click **Awaiting reply** in the row. This choice is saved on each device.
+
 ## Settle finished work
 
 Choose **Settle thread** from its menu to move finished work out of the active list

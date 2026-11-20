@@ -120,6 +120,17 @@ protection takes effect at once. The server's protection from the kernel's
 out-of-memory killer takes effect after `t3 service restart`. `t3 service status` reports whether
 the protection is in place, and `t3 service protect --undo` removes it.
 
+## Keep the computer awake
+
+By default, the server stops its computer from sleeping while agents work. Turn this off with
+**Settings → Maintenance → Keep awake while agents work**.
+
+To keep the computer awake when no agent is working, click the cup at the bottom of the sidebar on
+web or desktop. Click it again to let the computer sleep. Right-click the cup to keep the computer
+awake only until the running agents finish. **Keep this computer awake** in the command palette
+does the same as a click. The hold applies to the computer of your primary environment and lasts
+through server restarts. Closing a laptop lid still puts it to sleep.
+
 ## Troubleshooting
 
 Start with `t3 service status` on the host. It prints the log path and, on Linux,

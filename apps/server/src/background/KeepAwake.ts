@@ -11,6 +11,7 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/sql/SqlClient";
 
+import type { KeepAwakeHold } from "@t3tools/contracts";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import * as OrchestrationEventStore from "../persistence/OrchestrationEventStore.ts";
@@ -110,6 +111,18 @@ export const holdWhileWanted = <E, R>(
     Stream.runDrain,
   );
 
+interface KeepAwakeSettings {
+  readonly auto: boolean;
+  readonly hold: KeepAwakeHold;
+}
+
+export const wantsHold = ({ auto, hold }: KeepAwakeSettings, busy: boolean): boolean =>
+  hold === "on" || (busy && (auto || hold === "agents"));
+
+/** An `agents` hold ends itself once no run is active, so the setting reads `off` again. */
+export const clearsAgentsHold = ({ hold }: KeepAwakeSettings, busy: boolean): boolean =>
+  hold === "agents" && !busy;
+
 // Reads, the event subscription and the inhibitor retry until they succeed; the cap keeps a
 // host without an inhibitor (e.g. no logind) from retrying and warning constantly.
 const backoff = Schedule.exponential("5 seconds").pipe(
@@ -188,18 +201,28 @@ export const layer = Layer.effectDiscard(
       ),
       Stream.retry(backoff),
     );
-    const enabled = Stream.unwrap(
+    const pick = (value: {
+      readonly keepAwakeWhileAgentsWork: boolean;
+      readonly keepAwakeHold: KeepAwakeHold;
+    }): KeepAwakeSettings => ({
+      auto: value.keepAwakeWhileAgentsWork,
+      hold: value.keepAwakeHold,
+    });
+    const configured = Stream.unwrap(
       Effect.gen(function* () {
         const changes = yield* settings.subscribeChanges;
         const current = yield* settings.getSettings.pipe(
-          Effect.map((value) => value.keepAwakeWhileAgentsWork),
-          Effect.orElseSucceed(() => true),
+          Effect.map(pick),
+          Effect.orElseSucceed((): KeepAwakeSettings => ({ auto: true, hold: "off" })),
         );
-        return Stream.concat(
-          Stream.succeed(current),
-          Stream.map(changes, (value) => value.keepAwakeWhileAgentsWork),
-        );
+        return Stream.concat(Stream.succeed(current), Stream.map(changes, pick));
       }),
+    );
+    const clearAgentsHold = settings.updateSettings({ keepAwakeHold: "off" }).pipe(
+      Effect.tapCause((cause) =>
+        Effect.logWarning("keep-awake could not end the hold for agents", { cause }),
+      ),
+      Effect.ignore,
     );
 
     const holdOnce = Effect.gen(function* () {
@@ -245,7 +268,12 @@ export const layer = Layer.effectDiscard(
 
     yield* forkParked(
       holdWhileWanted(
-        Stream.zipLatestWith(enabled, active, (on, busy) => on && busy),
+        Stream.zipLatestWith(configured, active, (value, busy) => ({ value, busy })).pipe(
+          Stream.tap(({ value, busy }) =>
+            clearsAgentsHold(value, busy) ? clearAgentsHold : Effect.void,
+          ),
+          Stream.map(({ value, busy }) => wantsHold(value, busy)),
+        ),
         hold,
       ).pipe(Effect.catchCause((cause) => Effect.logWarning("keep-awake stopped", { cause }))),
     );

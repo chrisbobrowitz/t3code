@@ -44,6 +44,7 @@ import {
   CheckIcon,
   CircleAlertIcon,
   CircleCheckIcon,
+  MessageCircleReplyIcon,
   CircleDashedIcon,
   CircleDotDashedIcon,
   ClockIcon,
@@ -83,6 +84,7 @@ import { useEnvironmentQuery } from "../../state/query";
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { formatRelativeTime, parseTimestampDate } from "../../timestampFormat";
 import type { SidebarThreadSummary } from "../../types";
+import { isAwaitingReply, useAwaitingReplyStore } from "./awaitingReply";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { cn } from "~/lib/utils";
 import { textDirection } from "~/textDirection";
@@ -564,6 +566,7 @@ const TOP_STATUS_ICONS = {
   approval: ShieldQuestionIcon,
   failed: CircleAlertIcon,
   done: CircleCheckIcon,
+  awaiting: MessageCircleReplyIcon,
   woke: AlarmClockIcon,
 } as const;
 
@@ -773,9 +776,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     wokeAtDate !== null &&
     (lastVisitedDate === null || lastVisitedDate < wokeAtDate) &&
     thread.settledOverride !== "settled";
-  const shouldRecede = shouldRecedeSidebarThread({
+  const handledCompletedAt = useAwaitingReplyStore((state) => state.handled[threadKey]);
+  const isAwaiting = isAwaitingReply({
     status,
     isUnread,
+    isWoke,
+    isSettled: thread.settledOverride === "settled",
+    latestRun: thread.latestRun,
+    handledCompletedAt,
+  });
+  const shouldRecede = shouldRecedeSidebarThread({
+    status,
+    isUnread: isUnread || isAwaiting,
     isWoke,
     isActive: props.isActive,
     isSelected,
@@ -840,7 +852,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                           icon: "done" as const,
                           className: "text-success-foreground",
                         }
-                      : null;
+                      : isAwaiting
+                        ? {
+                            label: gt("Awaiting reply", { $context: "thread status" }),
+                            icon: "awaiting" as const,
+                            className: "text-success-foreground",
+                          }
+                        : null;
   const isWokeStatus = topStatus?.icon === "woke";
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
@@ -893,6 +911,17 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     if (props.wokeAt === null) return;
     onAcknowledgeWoke(threadRef, props.wokeAt);
   };
+  const handleMarkHandledClick = (event: ReactMouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const completedAt = thread.latestRun?.completedAt;
+    if (completedAt) useAwaitingReplyStore.getState().markHandled(threadKey, completedAt);
+  };
+  const dismissStatus = isWokeStatus
+    ? { label: gt("Dismiss Woke notification"), onClick: handleAcknowledgeWokeClick }
+    : topStatus?.icon === "awaiting"
+      ? { label: gt("Mark handled"), onClick: handleMarkHandledClick }
+      : null;
   const handleContextMenu = (event: ReactMouseEvent) => {
     event.preventDefault();
     onContextMenu(threadRef, { x: event.clientX, y: event.clientY }, contextMenuSourceOf(event));
@@ -1404,7 +1433,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                   <span
                     className={cn(
                       "inline-flex justify-end tabular-nums text-secondary-label transition-opacity",
-                      !isWoke && "group-any-hover/sidebar-row:opacity-0",
+                      !isWoke &&
+                        !(inFolder && topStatus?.icon === "awaiting") &&
+                        "group-any-hover/sidebar-row:opacity-0",
                     )}
                   >
                     {variantAction === "unsnooze" && props.snoozeWakeLabelText !== null ? (
@@ -1433,6 +1464,26 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                         <TooltipPopup side="top">
                           <T>Dismiss Woke notification</T>
                         </TooltipPopup>
+                      </Tooltip>
+                    ) : inFolder && topStatus?.icon === "awaiting" && dismissStatus ? (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <button
+                              type="button"
+                              aria-label={dismissStatus.label}
+                              onClick={dismissStatus.onClick}
+                              className={cn(
+                                "inline-flex cursor-pointer items-center gap-1 rounded-sm text-xs font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                                topStatus.className,
+                              )}
+                            >
+                              <TopStatusIcon icon={topStatus.icon} className="size-3" />
+                              <span role="status">{topStatus.label}</span>
+                            </button>
+                          }
+                        />
+                        <TooltipPopup side="top">{dismissStatus.label}</TooltipPopup>
                       </Tooltip>
                     ) : inFolder && topStatus ? (
                       // Folder rows have no status line, so the status takes the time slot.
@@ -1599,7 +1650,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                 >
                   <span
                     className={cn(
-                      isWokeStatus
+                      dismissStatus
                         ? "pointer-events-auto"
                         : "pointer-events-none group-has-[:focus-visible]/sidebar-status-slot:absolute group-has-[:focus-visible]/sidebar-status-slot:right-0 group-has-[:focus-visible]/sidebar-status-slot:opacity-0 group-any-hover/sidebar-row:absolute group-any-hover/sidebar-row:right-0 group-any-hover/sidebar-row:opacity-0",
                       "flex items-center self-center justify-self-end tabular-nums text-secondary-label",
@@ -1607,27 +1658,25 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                     )}
                   >
                     {topStatus ? (
-                      isWokeStatus ? (
+                      dismissStatus ? (
                         <Tooltip>
                           <TooltipTrigger
                             render={
                               <button
                                 type="button"
-                                aria-label={gt("Dismiss Woke notification")}
-                                onClick={handleAcknowledgeWokeClick}
+                                aria-label={dismissStatus.label}
+                                onClick={dismissStatus.onClick}
                                 className={cn(
                                   "inline-flex cursor-pointer items-center gap-1 rounded-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                                   topStatus.className,
                                 )}
                               >
-                                <AlarmClockIcon aria-hidden className="size-4 shrink-0" />
+                                <TopStatusIcon icon={topStatus.icon} className="size-4" />
                                 <span role="status">{topStatus.label}</span>
                               </button>
                             }
                           />
-                          <TooltipPopup side="top">
-                            <T>Dismiss Woke notification</T>
-                          </TooltipPopup>
+                          <TooltipPopup side="top">{dismissStatus.label}</TooltipPopup>
                         </Tooltip>
                       ) : (
                         <span

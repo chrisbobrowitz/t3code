@@ -6,6 +6,20 @@ import * as TestClock from "effect/testing/TestClock";
 
 import * as KeepAwake from "./KeepAwake.ts";
 
+describe("KeepAwake hold rules", () => {
+  // Fails if a manual hold stops depending on the hold alone, or `agents` outlives the last run.
+  it("holds for `on` while idle, and for `agents` only while a run is active", () => {
+    expect(KeepAwake.wantsHold({ auto: false, hold: "on" }, false)).toBe(true);
+    expect(KeepAwake.wantsHold({ auto: false, hold: "agents" }, true)).toBe(true);
+    expect(KeepAwake.wantsHold({ auto: false, hold: "agents" }, false)).toBe(false);
+    expect(KeepAwake.wantsHold({ auto: false, hold: "off" }, true)).toBe(false);
+    expect(KeepAwake.wantsHold({ auto: true, hold: "off" }, true)).toBe(true);
+    expect(KeepAwake.clearsAgentsHold({ auto: true, hold: "agents" }, false)).toBe(true);
+    expect(KeepAwake.clearsAgentsHold({ auto: true, hold: "agents" }, true)).toBe(false);
+    expect(KeepAwake.clearsAgentsHold({ auto: true, hold: "on" }, false)).toBe(false);
+  });
+});
+
 describe("KeepAwake.holdWhileWanted", () => {
   it.effect("keeps one hold across a gap shorter than the grace and releases after it", () =>
     Effect.gen(function* () {

@@ -255,6 +255,7 @@ import {
 } from "./CommandPaletteAddProject";
 import { useCommandPaletteThreadItems } from "./CommandPaletteThreadItems";
 import { useCommandPaletteThemeItems } from "./CommandPaletteThemeItems";
+import { useKeepAwakeCommandItem } from "./sidebar/KeepAwakeCup";
 import {
   PORT_FORWARD_GROUP_PREFIX,
   useCommandPalettePortForwardItem,
@@ -551,6 +552,7 @@ function OpenCommandPaletteDialog(props: {
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const providersByEnvironment = useEnvironmentProviders();
   const { changeThemeItem, changeAppearanceItem, themeEditorItem } = useCommandPaletteThemeItems();
+  const keepAwakeItem = useKeepAwakeCommandItem();
   const portForwardItem = useCommandPalettePortForwardItem({
     activeThread: activeThread ?? null,
     query: deferredQuery,
@@ -1675,6 +1677,7 @@ function OpenCommandPaletteDialog(props: {
   actionItems.push(changeAppearanceItem);
 
   actionItems.push(themeEditorItem);
+  if (keepAwakeItem) actionItems.push(keepAwakeItem);
 
   if (environments.some((environment) => environment.serverConfig !== null)) {
     actionItems.push({

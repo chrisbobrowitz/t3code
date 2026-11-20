@@ -12195,5 +12195,12 @@
   "27d76249d09eb69f": "Гид по ревью готов",
   "faa3bb26abb39c93": "Не удалось создать гид по ревью",
   "b7df38b7d8792d78": "Открыть гид",
-  "9e91e9a77b664e4e": "Не удалось запустить гид по ревью"
+  "9e91e9a77b664e4e": "Не удалось запустить гид по ревью",
+  "d749ec0a3473eab5": "Keeping this computer awake. Click to let it sleep.",
+  "e4ab2da9c7a6eca4": "Keeping this computer awake until agents finish. Click to let it sleep.",
+  "54acae54d5bd30fa": "Keep this computer awake. Right-click to keep it awake until agents finish.",
+  "685df5b114420fb9": "Keep this computer awake",
+  "97de36c8000d511e": "Let this computer sleep",
+  "1cb66db2f6a9786b": "Awaiting reply",
+  "02a9e0b8a3d1eb82": "Mark handled"
 }
