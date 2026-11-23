@@ -34,6 +34,8 @@ import {
 import { useTimelineRewind } from "./chat/useTimelineRewind";
 import { useThreadLifecycle } from "./chat/useThreadLifecycle";
 import { useRightPanelActions } from "./chat/useRightPanelActions";
+import { swarmNowItem } from "./chat/ThreadActivityBanners";
+import { useAntigravitySwarmActivity } from "./swarm/useAntigravitySwarmActivity";
 import { type TerminalLaunchContext, useChatTerminalActions } from "./chat/useChatTerminalActions";
 import { useComposerSend } from "./chat/useComposerSend";
 import { useComposerResume } from "./chat/useComposerResume";
@@ -2519,6 +2521,7 @@ export default function ChatView(props: ChatViewProps) {
     onOpenTurnDiffStable,
     openChangesFromThreadPanelStable,
     openFileSurfaceStable,
+    openSwarmSurfaceStable,
     toggleRightPanelMaximizedStable,
     toggleRightPanelStable,
     toggleThreadPanelStable,
@@ -3144,6 +3147,10 @@ export default function ChatView(props: ChatViewProps) {
     usageLimitsKey,
     usageLimitsOffered,
     openUsageLimits,
+    onSwarmBoardCommand:
+      isServerThread && selectedProvider === "antigravity" && activeThreadRef !== null
+        ? openSwarmSurfaceStable
+        : undefined,
     clearUsageLimitsFor,
     needsLoadBalancing,
     loadBalancing,
@@ -3298,9 +3305,34 @@ export default function ChatView(props: ChatViewProps) {
     workLocallyResendReady,
   ]);
 
+  const isAntigravityServerThread =
+    isServerThread && selectedProvider === "antigravity" && activeThread !== undefined;
+  const activeAntigravitySwarm = useAntigravitySwarmActivity({
+    enabled: isAntigravityServerThread,
+    environmentId,
+    threadId: activeThread?.id ?? null,
+    turnItems: serverProjection?.turnItems ?? EMPTY_TURN_ITEMS,
+    isWorking,
+  });
+  const swarmNow =
+    activeThread && activeAntigravitySwarm !== null
+      ? swarmNowItem(
+          {
+            threadId: activeThread.id,
+            swarm: activeAntigravitySwarm,
+            onOpenSwarm: openSwarmSurfaceStable,
+          },
+          messages,
+        )
+      : null;
+
   const shownThreadSyncPhase = activeEnvironmentUnavailable ? null : delayedThreadSyncPhase;
   const hasThreadNow =
-    attentionNow !== null || workNow !== null || goalNow !== null || shownThreadSyncPhase !== null;
+    attentionNow !== null ||
+    workNow !== null ||
+    swarmNow !== null ||
+    goalNow !== null ||
+    shownThreadSyncPhase !== null;
   const queuedRunCount = serverProjection ? getUserQueuedThreadRuns(serverProjection).length : 0;
   // The queue control is mounted for every server thread but joins the footer only while it shows
   // something, by its own rule: an optimistic message stops counting once the server has it.
@@ -3345,6 +3377,7 @@ export default function ChatView(props: ChatViewProps) {
           key={routeThreadKey}
           attention={attentionNow}
           work={workNow}
+          swarm={swarmNow}
           syncPhase={shownThreadSyncPhase}
           goal={goalNow}
         />
@@ -3897,6 +3930,14 @@ export default function ChatView(props: ChatViewProps) {
                                     ? openUsageLimits
                                     : undefined
                                 }
+                                onSwarmBoardCommand={
+                                  isServerThread &&
+                                  selectedProvider === "antigravity" &&
+                                  activeThreadRef !== null &&
+                                  !composerHasNonPromptContent
+                                    ? openSwarmSurfaceStable
+                                    : undefined
+                                }
                                 environmentUnavailable={activeEnvironmentUnavailableState}
                                 activePendingApproval={activePendingApproval}
                                 pendingApprovals={pendingApprovals}
@@ -4150,6 +4191,8 @@ export default function ChatView(props: ChatViewProps) {
                   {...(isServerThread && isGitRepo
                     ? { onOpenChanges: openChangesFromThreadPanelStable }
                     : {})}
+                  swarm={activeAntigravitySwarm}
+                  onOpenSwarm={openSwarmSurfaceStable}
                   onRunProjectScript={runProjectScriptStable}
                   onAddProjectScript={saveProjectScriptStable}
                   onUpdateProjectScript={updateProjectScriptStable}

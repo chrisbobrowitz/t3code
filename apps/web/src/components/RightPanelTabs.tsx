@@ -50,6 +50,7 @@ import {
   Files,
   Globe2,
   MessagesSquare,
+  NetworkIcon,
   Plus,
   TerminalSquare,
   Volume2Icon,
@@ -622,6 +623,8 @@ function surfaceTitle(
       return /^\d+$/.test(surface.key) ? `#${surface.key}` : surface.key;
     case "device":
       return surface.title ?? surface.target?.name ?? resolve(msg("Device"));
+    case "swarm":
+      return resolve(msg("Swarm"));
     case "thread":
       // Until the thread's own title loads.
       return resolve(msg("Thread"));
@@ -724,6 +727,8 @@ function SurfaceIcon({
       return <SideChatTabIcon environmentId={environmentId} threadId={surface.threadId} />;
     case "linked-thread":
       return <MessagesSquare className="size-3 shrink-0" />;
+    case "swarm":
+      return <NetworkIcon className="size-3 shrink-0" />;
     case "device":
       return surface.target?.platform === "ios" ? (
         <AppleIcon className="size-3 shrink-0" />

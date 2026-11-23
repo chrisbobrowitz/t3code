@@ -79,12 +79,14 @@ function ThreadSyncLine({ phase }: { readonly phase: ThreadSyncPhase }) {
 export function ThreadNow({
   attention,
   work,
+  swarm,
   syncPhase,
   goal,
 }: {
   /** Something that needs you elsewhere, such as a subagent's question. */
   readonly attention: ThreadNowItem | null;
   readonly work: ThreadNowItem | null;
+  readonly swarm?: ThreadNowItem | null;
   readonly syncPhase: ThreadSyncPhase | null;
   readonly goal: ThreadNowItem | null;
 }): ReactNode {
@@ -92,6 +94,7 @@ export function ThreadNow({
     <>
       {attention ? <ThreadNowLine item={attention} announce /> : null}
       {work ? <ThreadNowLine item={work} /> : null}
+      {swarm ? <ThreadNowLine item={swarm} /> : null}
       {syncPhase ? <ThreadSyncLine phase={syncPhase} /> : null}
       {goal ? <ThreadNowLine item={goal} /> : null}
     </>

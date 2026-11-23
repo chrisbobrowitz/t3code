@@ -1,4 +1,5 @@
 import type {
+  AntigravitySwarmSnapshot,
   EditorId,
   EnvironmentId,
   ProjectId,
@@ -44,6 +45,7 @@ import { cn } from "../../lib/utils";
 import { SlidersHorizontalIcon } from "lucide-react";
 import { ThreadDetailsControl } from "./ThreadDetailsControl";
 import { ThreadMcpServersPanel } from "./ThreadMcpServersPanel";
+import { ThreadSwarmPanel } from "../swarm/ThreadSwarmPanel";
 import {
   THREAD_DETAILS_PANEL_ICON_CLASS,
   THREAD_DETAILS_PANEL_LABEL_CLASS,
@@ -88,6 +90,8 @@ interface ThreadDetailsPanelProps extends Pick<
   onCheckoutPullRequestRequest?: (reference: string) => void;
   onComposerFocusRequest: () => void;
   onOpenChanges?: () => void;
+  swarm?: AntigravitySwarmSnapshot | null | undefined;
+  onOpenSwarm?: () => void;
   onRunProjectScript: (script: ProjectScript) => void;
   onAddProjectScript: (input: NewProjectScriptInput) => Promise<ProjectScriptActionResult>;
   onUpdateProjectScript: (
@@ -125,6 +129,14 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
   const folderIsRepo = props.isGitRepo && taskFolder?.projectIsWorktree !== false;
   // A No project thread's folder sits inside the shared scratch root, so it must never get git.
   // Until the config and project load, a No project thread looks like any other folder.
+  const isAntigravityThread =
+    props.isServerThread &&
+    props.usage.providerInstanceId != null &&
+    Array.isArray(props.usage.providers) &&
+    props.usage.providers.some(
+      (provider) =>
+        provider.instanceId === props.usage.providerInstanceId && provider.driver === "antigravity",
+    );
   const offersGit =
     props.gitCwd !== null &&
     serverConfig !== undefined &&
@@ -316,6 +328,15 @@ export function ThreadDetailsPanel(props: ThreadDetailsPanelProps) {
                   environmentId={props.environmentId}
                   providerInstanceId={props.usage.providerInstanceId}
                   cwd={props.gitCwd}
+                />
+              ) : null}
+
+              {density === "full" && !props.draftId && visible.swarm && isAntigravityThread ? (
+                <ThreadSwarmPanel
+                  environmentId={props.environmentId}
+                  threadId={props.threadId}
+                  swarm={props.swarm}
+                  onOpenSwarm={props.onOpenSwarm}
                 />
               ) : null}
 

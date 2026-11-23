@@ -123,7 +123,7 @@ function NativeChild(props: { readonly child: OrchestrationV2NativeChildWork }) 
   );
 }
 
-function NativeChildStep(props: { readonly step: OrchestrationV2NativeChildStep }) {
+export function NativeChildStep(props: { readonly step: OrchestrationV2NativeChildStep }) {
   const { step } = props;
   return (
     <li className="flex min-w-0 flex-col gap-1">

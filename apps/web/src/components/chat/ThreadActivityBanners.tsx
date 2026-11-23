@@ -1,4 +1,5 @@
 import type {
+  AntigravitySwarmSnapshot,
   EnvironmentId,
   OrchestrationV2PendingBackgroundTask,
   OrchestrationV2ProviderGoal,
@@ -21,6 +22,7 @@ import {
   CircleStopIcon,
   GitBranchIcon,
   MessageCircleIcon,
+  NetworkIcon,
   ShieldQuestionIcon,
   TargetIcon,
   TerminalIcon,
@@ -35,6 +37,11 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 import type { ThreadNowItem } from "./ThreadNow";
+import {
+  formatSwarmMemberSummary,
+  isSwarmActive,
+  summarizeSwarmMembers,
+} from "../swarm/swarmPresentation.logic";
 
 export function extensionStatusBannerItem(
   statuses: NonNullable<OrchestrationV2ProviderSession["extensionStatuses"]>,
@@ -297,6 +304,35 @@ export function backgroundWorkNowItem(
           {input.stopping ? <T>Stopping...</T> : <T context="verb, stops background work">Stop</T>}
         </InlineButton>
       </>
+    ),
+  };
+}
+
+/** Active or attention-needing Antigravity swarm summary for the end of the timeline. */
+export function swarmNowItem(
+  input: {
+    readonly threadId: ThreadId;
+    readonly swarm: AntigravitySwarmSnapshot;
+    readonly onOpenSwarm: () => void;
+  },
+  resolve: MessageResolver = m,
+): ThreadNowItem | null {
+  const counts = summarizeSwarmMembers(input.swarm.members);
+  if (!isSwarmActive(input.swarm) && counts.attention === 0) return null;
+  const needsAttentionOnly = !counts.hasActiveWork && counts.attention > 0;
+  return {
+    id: `swarm:${input.threadId}`,
+    icon: needsAttentionOnly ? (
+      <TriangleAlertIcon className="text-warning-foreground" />
+    ) : (
+      <NetworkIcon />
+    ),
+    title: input.swarm.title?.trim() || resolve(msg("Swarm")),
+    description: formatSwarmMemberSummary(counts, resolve),
+    actions: (
+      <InlineButton onClick={input.onOpenSwarm}>
+        <T>Open Swarm</T>
+      </InlineButton>
     ),
   };
 }

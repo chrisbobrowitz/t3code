@@ -73,6 +73,7 @@ import {
   MessageSquareDashedIcon,
   LinkIcon,
   MessageSquareIcon,
+  NetworkIcon,
   PaletteIcon,
   RotateCcwIcon,
   SettingsIcon,
@@ -731,6 +732,9 @@ function OpenCommandPaletteDialog(props: {
       : null;
   const activeThreadPreviewOpen = useRightPanelStore(
     (state) => selectActiveRightPanel(state.byThreadKey, previewPanelThreadRef) === "preview",
+  );
+  const activeThreadSwarmOpen = useRightPanelStore(
+    (state) => selectActiveRightPanel(state.byThreadKey, previewPanelThreadRef) === "swarm",
   );
   const supportsThreadFind =
     environments.find((environment) => environment.environmentId === activeThread?.environmentId)
@@ -1537,6 +1541,32 @@ function OpenCommandPaletteDialog(props: {
         useRightPanelStore.getState().open(threadRef, "pull-requests");
       },
     });
+  }
+
+  if (activeThread !== null && activeDraftThread === null) {
+    const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    const activeThreadProviderInstanceId =
+      activeThread.runtime?.providerInstanceId ?? activeThread.modelSelection.instanceId;
+    const activeThreadProviders = providersByEnvironment.get(activeThread.environmentId) ?? [];
+    const activeThreadProvider = activeThreadProviders.find(
+      (provider) => provider.instanceId === activeThreadProviderInstanceId,
+    );
+    const isAntigravityThread =
+      activeThreadProvider !== undefined
+        ? activeThreadProvider.driver === "antigravity"
+        : activeThreadProviderInstanceId === "antigravity";
+    if (isAntigravityThread) {
+      actionItems.push({
+        kind: "action",
+        value: "action:toggle-swarm",
+        searchTerms: ["swarm", "board", "workers", "agents", "antigravity", "open", "toggle"],
+        title: activeThreadSwarmOpen ? gt("Close Swarm") : gt("Open Swarm"),
+        icon: <NetworkIcon className={ITEM_ICON_CLASS} />,
+        run: async () => {
+          useRightPanelStore.getState().toggle(threadRef, "swarm");
+        },
+      });
+    }
   }
 
   if (activeThread !== null && canShareActiveThreadWithGuest) {

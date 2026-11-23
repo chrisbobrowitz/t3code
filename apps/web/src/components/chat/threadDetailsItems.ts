@@ -19,6 +19,7 @@ export const THREAD_DETAILS_ITEMS = [
     defaultVisible: true,
   },
   { id: "mcp", label: msg("MCP servers"), defaultVisible: true },
+  { id: "swarm", label: msg("Swarm"), defaultVisible: true },
   { id: "automations", label: msg("Automations"), defaultVisible: true },
   {
     id: "lineage",

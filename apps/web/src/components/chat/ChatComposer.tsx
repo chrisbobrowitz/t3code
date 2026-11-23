@@ -60,6 +60,7 @@ import { type FolderDropTarget, folderDropTarget, resolveDroppedFolderPath } fro
 import { splitTransferredFiles } from "./workspaceFileDrop";
 import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
 import { USAGE_LIMITS_COMMAND } from "@t3tools/shared/usageLimits";
+import { isSwarmBoardSlashCommand } from "../swarm/swarmPresentation.logic";
 import {
   memo,
   use,
@@ -405,6 +406,7 @@ export interface ChatComposerProps {
   keepFullHistory: boolean;
   onToggleKeepFullHistory: () => void;
   onUsageLimitsCommand?: (() => void) | undefined;
+  onSwarmBoardCommand?: (() => void) | undefined;
   sideChatAvailable?: boolean;
   sideChatDisabledReason?: string | null;
   /** Arms a fresh session for the next message; absent where `/clear` is unavailable. */
@@ -2365,6 +2367,20 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       });
       return false;
     }
+    if (
+      props.onSwarmBoardCommand !== undefined &&
+      !activePendingProgress &&
+      countPreparingComposerImages(attachmentTargetKey) === 0 &&
+      isSwarmBoardSlashCommand(promptRef.current)
+    ) {
+      event?.preventDefault();
+      props.onSwarmBoardCommand();
+      setPrompt("");
+      promptRef.current = "";
+      composerRef.current?.resetCursorState();
+      onTypingGuardSend();
+      return true;
+    }
     if (submissionBlocked || !readEnvironmentScope(environmentId, AuthOrchestrationOperateScope)) {
       event?.preventDefault();
       return false;
@@ -2732,21 +2748,26 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // An open question owns the space above the composer. Only a machine problem,
   // which is why an answer could not go through, stays beside it.
   const replyTo = composerDraft?.replyTo ?? null;
-  const draftRunsLocally = composerRunsDraftLocally({
-    text: prompt,
-    holdsOnlyText:
-      composerImages.length + composerFiles.length === 0 &&
-      composerSendState.sendableTerminalContexts.length === 0 &&
-      composerPreviewAnnotations.length === 0 &&
-      composerReviewComments.length === 0 &&
-      composerThreadContexts.length === 0 &&
-      composerEnvironmentContexts.length === 0 &&
-      replyTo === null,
-    sideChat: props.sideChatAvailable === true || (props.sideChatDisabledReason ?? null) !== null,
-    usageLimits: props.onUsageLimitsCommand !== undefined,
-    codexFeedback: selectedProvider === "codex" && multipleModelSelections === null,
-    freshSession: props.onFreshSession !== undefined,
-  });
+  const draftHoldsOnlyText =
+    composerImages.length + composerFiles.length === 0 &&
+    composerSendState.sendableTerminalContexts.length === 0 &&
+    composerPreviewAnnotations.length === 0 &&
+    composerReviewComments.length === 0 &&
+    composerThreadContexts.length === 0 &&
+    composerEnvironmentContexts.length === 0 &&
+    replyTo === null;
+  const draftRunsLocally =
+    composerRunsDraftLocally({
+      text: prompt,
+      holdsOnlyText: draftHoldsOnlyText,
+      sideChat: props.sideChatAvailable === true || (props.sideChatDisabledReason ?? null) !== null,
+      usageLimits: props.onUsageLimitsCommand !== undefined,
+      codexFeedback: selectedProvider === "codex" && multipleModelSelections === null,
+      freshSession: props.onFreshSession !== undefined,
+    }) ||
+    (props.onSwarmBoardCommand !== undefined &&
+      draftHoldsOnlyText &&
+      isSwarmBoardSlashCommand(prompt));
   const replyBannerItems: readonly ComposerBannerStackItem[] = replyTo
     ? [
         {

@@ -36,6 +36,9 @@ const DiffPanel = lazy(() => import("../DiffPanel"));
 const DevicePanel = lazy(() =>
   import("../device/DevicePanel").then((module) => ({ default: module.DevicePanel })),
 );
+const SwarmPanel = lazy(() =>
+  import("../swarm/SwarmPanel").then((module) => ({ default: module.SwarmPanel })),
+);
 const FilePreviewPanel = lazy(() => import("../files/FilePreviewPanel"));
 
 type RightPanelTerminalProps = Omit<
@@ -251,6 +254,17 @@ export function RightPanelSurfaceContent(props: {
           surface={surface}
           visible={visible && props.activeSurfaceId === surface.id}
         />
+      );
+    case "swarm":
+      return (
+        <Suspense fallback={null}>
+          <SwarmPanel
+            key={scopedThreadKey(threadRef)}
+            environmentId={props.environmentId}
+            threadId={threadRef.threadId}
+            visible={visible && props.activeSurfaceId === surface.id}
+          />
+        </Suspense>
       );
     case "device":
       return (

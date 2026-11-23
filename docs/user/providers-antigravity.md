@@ -160,6 +160,23 @@ Use Stop to interrupt a running goal, then ask Antigravity to stop pursuing it
 before starting more work. Ordinary follow-ups wait until the running turn ends.
 T3 does not support Antigravity goal status, pause, resume, or clear commands.
 
+## Run a native swarm
+
+When your Antigravity runtime offers `/swarm`, send `/swarm` followed by the task you
+want multiple agents to coordinate. Antigravity spawns workers, tracks them on a
+shared board, and keeps the turn open until the workers finish or park.
+
+To inspect the live swarm on web or desktop, open the **Swarm** tab in the right panel
+from the command palette, the thread details card, or the active swarm banner. You can
+also send `/swarm board` in the composer on an existing Antigravity thread to open the
+tab directly.
+
+The **Swarm** tab shows the coordinator plan when present, the message board with
+channel and agent filters, and the worker roster with live states. Select a worker to
+read its recent transcript steps. This view is read only: send instructions through
+the coordinator thread, and use Stop to cancel the coordinator and its workers. Remote
+Spanner swarms show their anchor status without local board messages or transcripts.
+
 ## Check access and troubleshoot
 
 Open **Usage > Limits** to see the remaining Gemini and shared Claude/GPT allowances

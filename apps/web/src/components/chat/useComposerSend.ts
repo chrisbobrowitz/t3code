@@ -20,6 +20,7 @@ import {
   makeThreadErrorSetter,
 } from "../ChatView.logic";
 import { isUsageLimitsCommand } from "@t3tools/shared/usageLimits";
+import { isSwarmBoardSlashCommand } from "../swarm/swarmPresentation.logic";
 import {
   AuthOrchestrationOperateScope,
   DEFAULT_MODEL,
@@ -249,6 +250,7 @@ interface ComposerSendInput {
   readonly usageLimitsKey: string | null;
   readonly usageLimitsOffered: boolean;
   readonly openUsageLimits: UsageLimitsPanel["open"];
+  readonly onSwarmBoardCommand?: (() => void) | undefined;
   readonly clearUsageLimitsFor: UsageLimitsPanel["clearFor"];
   readonly needsLoadBalancing: boolean;
   readonly loadBalancing: DraftEnvironmentRouting["loadBalancing"];
@@ -347,6 +349,7 @@ export function useComposerSend(input: ComposerSendInput) {
     usageLimitsKey,
     usageLimitsOffered,
     openUsageLimits,
+    onSwarmBoardCommand,
     clearUsageLimitsFor,
     needsLoadBalancing,
     loadBalancing,
@@ -445,6 +448,21 @@ export function useComposerSend(input: ComposerSendInput) {
           promptRef.current = "";
           composerRef.current?.resetCursorState();
         }
+      }
+      return;
+    }
+    if (
+      onSwarmBoardCommand !== undefined &&
+      !directAnnotation &&
+      !draftHasNonPromptContent(composerDraftTarget) &&
+      countPreparingComposerImages(composerTargetKey(composerDraftTarget)) === 0 &&
+      isSwarmBoardSlashCommand(promptAtSend)
+    ) {
+      onSwarmBoardCommand();
+      setComposerDraftPrompt(composerDraftTarget, "");
+      if (currentRouteThreadKeyRef.current === routeThreadKey) {
+        promptRef.current = "";
+        composerRef.current?.resetCursorState();
       }
       return;
     }
