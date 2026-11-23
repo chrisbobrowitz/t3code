@@ -733,8 +733,13 @@ function OpenCommandPaletteDialog(props: {
   const activeThreadPreviewOpen = useRightPanelStore(
     (state) => selectActiveRightPanel(state.byThreadKey, previewPanelThreadRef) === "preview",
   );
-  const activeThreadSwarmOpen = useRightPanelStore(
-    (state) => selectActiveRightPanel(state.byThreadKey, previewPanelThreadRef) === "swarm",
+  const activeThreadSwarmOpen = useRightPanelStore((state) =>
+    activeThread && !activeDraftThread
+      ? selectActiveRightPanel(
+          state.byThreadKey,
+          scopeThreadRef(activeThread.environmentId, activeThread.id),
+        ) === "swarm"
+      : false,
   );
   const supportsThreadFind =
     environments.find((environment) => environment.environmentId === activeThread?.environmentId)
@@ -1543,7 +1548,7 @@ function OpenCommandPaletteDialog(props: {
     });
   }
 
-  if (activeThread !== null && activeDraftThread === null) {
+  if (activeThread && !activeDraftThread) {
     const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
     const activeThreadProviderInstanceId =
       activeThread.runtime?.providerInstanceId ?? activeThread.modelSelection.instanceId;
