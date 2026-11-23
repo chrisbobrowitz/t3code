@@ -233,6 +233,8 @@ const makeHarness = Effect.fn("makeAntigravityDriverHarness")(function* (
     enabled: options.enabled ?? true,
     config: { ...AntigravityDriver.defaultConfig(), ...options.config },
     environment: [
+      { name: "HOME", value: path.join(root, "home") },
+      { name: "USERPROFILE", value: path.join(root, "home") },
       { name: "PATH", value: instancePath },
       { name: "T3_ACP_ANTIGRAVITY", value: "1" },
       { name: "T3_ACP_REQUEST_LOG_PATH", value: requestLog },
@@ -760,6 +762,51 @@ it.layer(layerTest)("AntigravityDriver", (it) => {
             .map((request) => request.params?.methodId),
         ).toEqual(["agent-platform"]);
         yield* h.assertClosed;
+      }),
+  );
+
+  it.effect.skipIf(windowsHost)(
+    "reports user MCP servers configured in ~/.gemini/config/mcp_config.json",
+    () =>
+      Effect.gen(function* () {
+        const h = yield* makeHarness();
+        const mcpStatus = h.instance.mcpStatus;
+        if (!mcpStatus) return yield* Effect.die("Antigravity does not expose mcpStatus.");
+        expect(yield* mcpStatus(undefined)).toEqual([]);
+
+        const userHome = h.path.join(h.path.dirname(h.first.managedVersionDirectory), "home");
+        const userMcpConfig = h.path.join(userHome, ".gemini", "config", "mcp_config.json");
+        yield* h.fs.makeDirectory(h.path.dirname(userMcpConfig), { recursive: true });
+        yield* h.fs.writeFileString(
+          userMcpConfig,
+          JSON.stringify({
+            mcpServers: {
+              "viasat-slack-mcp": {
+                command: "npx",
+                args: ["-y", "mcp-remote", "https://slack.mcp.viasat.io/mcp"],
+                disabled: false,
+              },
+              "disabled-mcp": { command: "node", disabled: true },
+            },
+          }),
+        );
+        expect(
+          (yield* mcpStatus(undefined)).map((s) => ({ name: s.name, state: s.state })),
+        ).toEqual([
+          { name: "viasat-slack-mcp", state: "pending" },
+          { name: "disabled-mcp", state: "disabled" },
+        ]);
+
+        yield* h.fs.makeDirectory(
+          h.path.join(h.profileDirectory, "antigravity-acp", "mcp", "viasat-slack-mcp"),
+          { recursive: true },
+        );
+        expect(
+          (yield* mcpStatus(undefined)).map((s) => ({ name: s.name, state: s.state })),
+        ).toEqual([
+          { name: "viasat-slack-mcp", state: "connected" },
+          { name: "disabled-mcp", state: "disabled" },
+        ]);
       }),
   );
 

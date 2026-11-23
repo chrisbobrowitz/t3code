@@ -111,6 +111,10 @@ on its own; to share a folder like that one, list it in `~/.gemini/config/skills
 (or a project's `.agents/skills.json`), and T3 Code shows the skills it declares,
 honoring `inherits`, `include_only`, and `exclude`.
 
+Antigravity loads user MCP servers from `~/.gemini/config/mcp_config.json` on
+the environment. T3 Code lists those configured servers in
+**Settings > Providers** and in the thread details panel.
+
 Antigravity receives images and audio directly, and reads PDFs and text files as
 documents. Other attachments, including videos, are passed as a saved file path for
 the agent to inspect with its tools.

@@ -71,6 +71,7 @@ import {
 import { makeAcpNativeLoggerFactory } from "@t3tools/provider-acp/server/nativeLogging";
 import { ProviderDriverError } from "../Errors.ts";
 import { makeAntigravityProvider } from "../AntigravityProvider.ts";
+import { readAntigravityMcpStatus } from "../antigravityMcpStatus.ts";
 import { makeAntigravityUsageProbe } from "../antigravityUsageLimits.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import * as ModelCatalog from "@t3tools/provider-core/server/ModelCatalog";
@@ -741,8 +742,11 @@ export const AntigravityDriver: ProviderDriver<
       textGeneration,
       auth: authFlow.controller,
       refreshModels,
-      // Sessions run in a private profile and get `mcpServers: []`, so none load.
-      mcpStatus: () => Effect.succeed([]),
+      mcpStatus: () =>
+        readAntigravityMcpStatus({ profileDirectory, userHome }).pipe(
+          Effect.provideService(FileSystem.FileSystem, fileSystem),
+          Effect.provideService(Path.Path, path),
+        ),
     } satisfies ProviderInstance;
   }),
 };

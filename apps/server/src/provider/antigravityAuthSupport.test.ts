@@ -706,6 +706,13 @@ it.layer(NodeServices.layer)("Antigravity profile preparation", (it) => {
           path.join(userGemini, "config", "skills.json"),
           JSON.stringify({ entries: [{ path: "/tmp/shared-skills" }] }),
         );
+        yield* fs.writeFileString(
+          path.join(userGemini, "config", "mcp_config.json"),
+          JSON.stringify({ mcpServers: { slack: { command: "npx" } } }),
+        );
+        // Replace a 0-byte placeholder written by agy while preserving any non-empty profile file.
+        yield* fs.makeDirectory(path.join(profileDirectory, "config"), { recursive: true });
+        yield* fs.writeFileString(path.join(profileDirectory, "config", "mcp_config.json"), "");
 
         yield* prepareAntigravityProfile({ profileDirectory, userHome });
         expect(yield* fs.readLink(path.join(profileDirectory, "AGENTS.md"))).toBe(
@@ -717,14 +724,27 @@ it.layer(NodeServices.layer)("Antigravity profile preparation", (it) => {
         expect(yield* fs.readLink(path.join(profileDirectory, "config", "skills.json"))).toBe(
           path.join(userGemini, "config", "skills.json"),
         );
+        expect(yield* fs.readLink(path.join(profileDirectory, "config", "mcp_config.json"))).toBe(
+          path.join(userGemini, "config", "mcp_config.json"),
+        );
+
+        // Repeat prepare preserves the existing symlink cleanly.
+        yield* prepareAntigravityProfile({ profileDirectory, userHome });
+        expect(yield* fs.readLink(path.join(profileDirectory, "config", "mcp_config.json"))).toBe(
+          path.join(userGemini, "config", "mcp_config.json"),
+        );
 
         yield* fs.remove(path.join(userGemini, "AGENTS.md"));
         yield* fs.remove(path.join(userGemini, "config", "skills.json"));
+        yield* fs.remove(path.join(userGemini, "config", "mcp_config.json"));
         yield* fs.remove(path.join(profileDirectory, "GEMINI.md"));
         yield* fs.writeFileString(path.join(profileDirectory, "GEMINI.md"), "profile's own rule");
         yield* prepareAntigravityProfile({ profileDirectory, userHome });
         expect(yield* fs.exists(path.join(profileDirectory, "AGENTS.md"))).toBe(false);
         expect(yield* fs.exists(path.join(profileDirectory, "config", "skills.json"))).toBe(false);
+        expect(yield* fs.exists(path.join(profileDirectory, "config", "mcp_config.json"))).toBe(
+          false,
+        );
         expect(yield* fs.readFileString(path.join(profileDirectory, "GEMINI.md"))).toBe(
           "profile's own rule",
         );
@@ -744,23 +764,33 @@ it.layer(NodeServices.layer)("Antigravity profile preparation", (it) => {
       const profileGemini = path.join(profileDirectory, "GEMINI.md");
       const profileSkillsJson = path.join(profileDirectory, "config", "skills.json");
       const userSkillsJson = path.join(userGemini, "config", "skills.json");
+      const profileMcpJson = path.join(profileDirectory, "config", "mcp_config.json");
+      const userMcpJson = path.join(userGemini, "config", "mcp_config.json");
       yield* fs.makeDirectory(path.join(userGemini, "config"), { recursive: true });
+      yield* fs.makeDirectory(path.join(profileDirectory, "config"), { recursive: true });
       yield* fs.writeFileString(path.join(userGemini, "AGENTS.md"), "global agents rule");
       yield* fs.writeFileString(path.join(userGemini, "GEMINI.md"), "global gemini rule");
       yield* fs.writeFileString(userSkillsJson, '{"entries":[]}');
+      yield* fs.writeFileString(userMcpJson, '{"mcpServers":{"slack":{"command":"npx"}}}');
+      yield* fs.writeFileString(profileMcpJson, "");
 
       yield* prepare;
       expect(yield* fs.readFileString(profileAgents)).toBe("global agents rule");
       expect(yield* fs.readFileString(profileGemini)).toBe("global gemini rule");
       expect(yield* fs.readFileString(profileSkillsJson)).toBe('{"entries":[]}');
+      expect(yield* fs.readFileString(profileMcpJson)).toBe(
+        '{"mcpServers":{"slack":{"command":"npx"}}}',
+      );
 
       yield* fs.writeFileString(path.join(userGemini, "AGENTS.md"), "edited agents rule");
       yield* fs.remove(path.join(userGemini, "GEMINI.md"));
       yield* fs.writeFileString(userSkillsJson, '{"entries":[{"path":"/skills"}]}');
+      yield* fs.remove(userMcpJson);
       yield* prepare;
       expect(yield* fs.readFileString(profileAgents)).toBe("edited agents rule");
       expect(yield* fs.exists(profileGemini)).toBe(false);
       expect(yield* fs.readFileString(profileSkillsJson)).toBe('{"entries":[{"path":"/skills"}]}');
+      expect(yield* fs.exists(profileMcpJson)).toBe(false);
 
       yield* fs.writeFileString(profileGemini, "profile's own rule");
       yield* fs.writeFileString(path.join(userGemini, "GEMINI.md"), "global gemini rule");
