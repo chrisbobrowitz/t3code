@@ -316,7 +316,10 @@ const TranscriptLine = Schema.Struct({
     Schema.Array(Schema.Struct({ name: Schema.String, args: Schema.optional(Schema.Unknown) })),
   ),
 });
-const decodeTranscriptLine = Schema.decodeUnknownOption(Schema.fromJsonString(TranscriptLine));
+export type AntigravityTranscriptLine = Schema.Schema.Type<typeof TranscriptLine>;
+export const decodeAntigravityTranscriptLine = Schema.decodeUnknownOption(
+  Schema.fromJsonString(TranscriptLine),
+);
 
 // The runtime records each tool argument value as JSON text.
 const decodeArgument = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown));
@@ -333,14 +336,14 @@ const toolArguments = (args: unknown) =>
 const capText = (value: string, limit: number) =>
   value.length <= limit ? value : `${value.slice(0, limit)}…`;
 
-/** Skips the runtime's opening envelope around the launch prompt the view already shows. */
-function transcriptSteps(
+/** Parses transcript JSONL text into bounded steps, skipping an optional opening prompt envelope. */
+export function parseAntigravityTranscriptSteps(
   contents: string,
-  prompt: string,
+  prompt = "",
 ): ReadonlyArray<OrchestrationV2NativeChildStep> {
   const launchPrompt = prompt.trim();
   return contents.split("\n").flatMap((line) =>
-    Option.match(decodeTranscriptLine(line), {
+    Option.match(decodeAntigravityTranscriptLine(line), {
       onNone: () => [],
       onSome: (step) =>
         step.step_index === 0 &&
@@ -367,32 +370,28 @@ function transcriptSteps(
   );
 }
 
-/** Reads the tail of the transcript at the named child's own unlinked profile path. */
-async function readChildTranscript(
+/** Reads the bounded tail and mtime of a conversation's transcript at its unlinked profile path. */
+export async function readAntigravityTranscriptTail(
   profileRoot: string,
-  child: InvokeRecord["children"][number],
-  prompt: string,
+  conversationId: string,
   byteCap: number,
-) {
+  expectedLogUri?: string,
+): Promise<
+  { readonly contents: string; readonly truncated: boolean; readonly mtimeMs: number } | undefined
+> {
+  if (!NATIVE_ID.test(conversationId)) return undefined;
   const expected = (
     await antigravityManagedPath(
       profileRoot,
-      [
-        "antigravity-acp",
-        "brain",
-        child.conversationId,
-        ".system_generated",
-        "logs",
-        "transcript.jsonl",
-      ],
+      ["antigravity-acp", "brain", conversationId, ".system_generated", "logs", "transcript.jsonl"],
       "file",
     )
   )?.path;
   if (expected === undefined) return undefined;
-  if (child.logUri !== undefined) {
+  if (expectedLogUri !== undefined) {
     let named: string;
     try {
-      named = NodeURL.fileURLToPath(child.logUri);
+      named = NodeURL.fileURLToPath(expectedLogUri);
     } catch {
       return undefined;
     }
@@ -414,14 +413,37 @@ async function readChildTranscript(
     let lineStart = 0;
     if (tailStart > 0) {
       const newline = bytes.indexOf(0x0a);
-      if (newline === -1) return { steps: [], truncated: true };
+      if (newline === -1) return { contents: "", truncated: true, mtimeMs: stat.mtimeMs };
       lineStart = newline + 1;
     }
-    const contents = bytes.toString("utf8", lineStart);
-    return { steps: transcriptSteps(contents, prompt), truncated: tailStart > 0 };
+    return {
+      contents: bytes.toString("utf8", lineStart),
+      truncated: tailStart > 0,
+      mtimeMs: stat.mtimeMs,
+    };
   } finally {
     await handle.close();
   }
+}
+
+/** Reads the tail of the transcript at the named child's own unlinked profile path. */
+async function readChildTranscript(
+  profileRoot: string,
+  child: InvokeRecord["children"][number],
+  prompt: string,
+  byteCap: number,
+) {
+  const tail = await readAntigravityTranscriptTail(
+    profileRoot,
+    child.conversationId,
+    byteCap,
+    child.logUri,
+  );
+  if (tail === undefined) return undefined;
+  return {
+    steps: parseAntigravityTranscriptSteps(tail.contents, prompt),
+    truncated: tail.truncated,
+  };
 }
 
 class AntigravityChildWorkReadError extends Schema.TaggedError<AntigravityChildWorkReadError>()(
@@ -741,7 +763,7 @@ async function readLastTranscriptLine(
       const lastNewline = trimmed.lastIndexOf(0x0a);
       if (lastNewline === -1 && start > 0) continue;
       const line = trimmed.toString("utf8", lastNewline + 1);
-      return Option.getOrUndefined(decodeTranscriptLine(line));
+      return Option.getOrUndefined(decodeAntigravityTranscriptLine(line));
     }
     return undefined;
   } finally {

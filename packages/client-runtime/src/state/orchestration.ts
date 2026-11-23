@@ -205,7 +205,7 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
       label: "environment-data:orchestration:antigravity-swarm",
       tag: ANTIGRAVITY_SWARM_WS_METHODS.getSwarm,
       staleTimeMs: 2_000,
-      idleTtlMs: 0,
+      idleTtlMs: 30_000,
     }),
     // Polls only while mounted (open Swarm panel or active swarm indicator).
     antigravitySwarmLive: createEnvironmentRpcQueryAtomFamily(runtime, {
@@ -217,6 +217,12 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
     }),
     antigravitySwarmWorkerTranscript: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:orchestration:antigravity-swarm-worker-transcript",
+      tag: ANTIGRAVITY_SWARM_WS_METHODS.getSwarmWorkerTranscript,
+      staleTimeMs: 2_000,
+      idleTtlMs: 30_000,
+    }),
+    antigravitySwarmWorkerTranscriptLive: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:orchestration:antigravity-swarm-worker-transcript-live",
       tag: ANTIGRAVITY_SWARM_WS_METHODS.getSwarmWorkerTranscript,
       staleTimeMs: 0,
       idleTtlMs: 0,

@@ -29,6 +29,7 @@ import { rpcInitialItems } from "./rpcInitialItems.ts";
 import { subscribeChatGptHandoff } from "./provider/CodexChatGptHandoff.ts";
 import {
   AcpRegistryOperationError,
+  ANTIGRAVITY_SWARM_WS_METHODS,
   CommandId,
   authScopeResponse,
   AuthAccessStreamError,
@@ -118,6 +119,7 @@ import { RpcGroup, RpcSerialization, RpcServer } from "effect/rpc";
 
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as NativeChildWorkQuery from "./orchestration-v2/NativeChildWorkQuery.ts";
+import * as AntigravitySwarmQuery from "./orchestration-v2/AntigravitySwarmQuery.ts";
 import * as ServerConfig from "./config.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as Keybindings from "./keybindings.ts";
@@ -1546,6 +1548,7 @@ export const layerWsRpc = (
       const agentSessionImporter = yield* AgentSessionImporter.AgentSessionImporter;
       const checkpointDiffQuery = yield* CheckpointDiffQuery.CheckpointDiffQuery;
       const nativeChildWork = yield* NativeChildWorkQuery.NativeChildWorkQuery;
+      const antigravitySwarm = yield* AntigravitySwarmQuery.AntigravitySwarmQuery;
       const keybindings = yield* Keybindings.Keybindings;
       const featureFlags = yield* FeatureFlags.FeatureFlags;
       const environmentTheme = yield* EnvironmentTheme.EnvironmentThemeService;
@@ -2083,6 +2086,10 @@ export const layerWsRpc = (
           readWorkflowScript({ scriptPath: input.scriptPath }),
         [ORCHESTRATION_V2_WS_METHODS.getNativeChildWork]: (input) =>
           nativeChildWork.getNativeChildWork(input),
+        [ANTIGRAVITY_SWARM_WS_METHODS.getSwarm]: (input) =>
+          antigravitySwarm.getAntigravitySwarm(input),
+        [ANTIGRAVITY_SWARM_WS_METHODS.getSwarmWorkerTranscript]: (input) =>
+          antigravitySwarm.getAntigravitySwarmWorkerTranscript(input),
         [ORCHESTRATION_V2_WS_METHODS.getTurnItem]: (input) =>
           threadManagement.getTurnItem(input).pipe(
             Effect.mapError(

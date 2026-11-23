@@ -477,6 +477,136 @@ function withAntigravityEditPatches(
   });
 }
 
+const SWARM_DETAIL_LIMIT = 160;
+const ANTIGRAVITY_SWARM_TOOL_TITLES = new Set([
+  "Run swarm",
+  "Run post_message",
+  "Run read_board",
+  "Run swarm_wait",
+]);
+
+function isAntigravityMcpToolData(data: Record<string, unknown>): boolean {
+  const meta = Predicate.isObject(data.meta)
+    ? data.meta
+    : Predicate.isObject(data._meta)
+      ? data._meta
+      : undefined;
+  return meta?.is_mcp_tool_call === true;
+}
+
+function firstNonEmptyLine(text: string): string | undefined {
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed) {
+      if (trimmed.length <= SWARM_DETAIL_LIMIT) return trimmed;
+      const prefix = trimmed.slice(0, SWARM_DETAIL_LIMIT - 3).replace(/[\uD800-\uDBFF]$/u, "");
+      return copyBoundedText(`${prefix}...`);
+    }
+  }
+  return undefined;
+}
+
+function describeAntigravitySwarmToolCall(
+  title: string | undefined,
+  kind: string | undefined,
+  data: Record<string, unknown>,
+): { readonly title: string; readonly detail?: string } | undefined {
+  if (
+    (kind !== undefined && kind !== "other") ||
+    title === undefined ||
+    !ANTIGRAVITY_SWARM_TOOL_TITLES.has(title) ||
+    isAntigravityMcpToolData(data)
+  ) {
+    return undefined;
+  }
+  const rawInput = Predicate.isObject(data.rawInput) ? data.rawInput : undefined;
+  const nonEmptyString = (key: string): string | undefined => {
+    const value = rawInput?.[key];
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  };
+  if (title === "Run swarm") {
+    const action = nonEmptyString("action");
+    const name = nonEmptyString("name");
+    const model = nonEmptyString("model");
+    switch (action) {
+      case "add": {
+        const taskCount =
+          Array.isArray(rawInput?.tasks) && rawInput.tasks.length > 0
+            ? rawInput.tasks.length
+            : typeof rawInput?.n === "number" && Number.isInteger(rawInput.n) && rawInput.n > 1
+              ? rawInput.n
+              : undefined;
+        const worker =
+          name !== undefined && taskCount !== undefined ? `${name} (x${taskCount})` : name;
+        const detail =
+          worker !== undefined && model !== undefined ? `${worker} (${model})` : (worker ?? model);
+        return detail !== undefined
+          ? { title: "Add swarm worker", detail }
+          : { title: "Add swarm worker" };
+      }
+      case "title": {
+        const swarmTitle = nonEmptyString("title");
+        return swarmTitle !== undefined
+          ? { title: "Name swarm", detail: swarmTitle }
+          : { title: "Name swarm" };
+      }
+      case "kill":
+        return name !== undefined
+          ? { title: "Remove swarm worker", detail: name }
+          : { title: "Remove swarm worker" };
+      case "model": {
+        const detail =
+          name !== undefined && model !== undefined ? `${name} -> ${model}` : (name ?? model);
+        return detail !== undefined
+          ? { title: "Switch swarm worker model", detail }
+          : { title: "Switch swarm worker model" };
+      }
+      case "status":
+        return { title: "Check swarm status" };
+      case "models":
+        return { title: "List swarm models" };
+      default:
+        return action !== undefined
+          ? { title: "Manage swarm", detail: action }
+          : { title: "Manage swarm" };
+    }
+  }
+  if (title === "Run post_message") {
+    const text = typeof rawInput?.text === "string" ? firstNonEmptyLine(rawInput.text) : undefined;
+    return text !== undefined
+      ? { title: "Post to swarm board", detail: text }
+      : { title: "Post to swarm board" };
+  }
+  if (title === "Run read_board") {
+    if (rawInput?.status === true) {
+      return { title: "Read swarm board", detail: "roster status" };
+    }
+    if (Array.isArray(rawInput?.seqs) && rawInput.seqs.length > 0) {
+      const seqs = rawInput.seqs
+        .filter((value): value is number => typeof value === "number" && Number.isInteger(value))
+        .map((seq) => `#${seq}`);
+      if (seqs.length > 0) {
+        return { title: "Read swarm board", detail: seqs.join(", ") };
+      }
+    }
+    if (typeof rawInput?.since === "number" && Number.isInteger(rawInput.since)) {
+      return { title: "Read swarm board", detail: `since #${rawInput.since}` };
+    }
+    return { title: "Read swarm board" };
+  }
+  if (title === "Run swarm_wait") {
+    if (typeof rawInput?.since === "number" && Number.isInteger(rawInput.since)) {
+      const detail =
+        rawInput.mentions_only === false
+          ? `since #${rawInput.since} (all)`
+          : `since #${rawInput.since}`;
+      return { title: "Wait for swarm board", detail };
+    }
+    return { title: "Wait for swarm board" };
+  }
+  return undefined;
+}
+
 export function normalizeAntigravityToolCall(
   toolCall: AcpToolCallState,
   readPreEditFile = readAntigravityPreEditFile,
@@ -508,6 +638,7 @@ export function normalizeAntigravityToolCall(
   const sanitizedData = sanitizeAntigravityToolPayload(toolCall.data);
   const data: Record<string, unknown> = Predicate.isObject(sanitizedData) ? sanitizedData : {};
   const kind = toolCall.kind ?? (command !== undefined ? "execute" : undefined);
+  const swarmDisplay = describeAntigravitySwarmToolCall(toolCall.title, kind, data);
   if (kind !== undefined) data.kind = kind;
   if (command !== undefined) data.command = command;
   if (cwd !== undefined) data.cwd = cwd;
@@ -532,16 +663,21 @@ export function normalizeAntigravityToolCall(
       ...(exitCode !== undefined ? { exitCode } : {}),
     };
   }
+  const displayTitle = swarmDisplay?.title ?? toolCall.title;
+  const displayDetail =
+    command !== undefined
+      ? command
+      : swarmDisplay?.detail !== undefined
+        ? boundText(swarmDisplay.detail)
+        : toolCall.detail !== undefined
+          ? boundText(toolCall.detail)
+          : undefined;
   return {
     ...toolCall,
     ...(kind !== undefined ? { kind } : {}),
     ...(command !== undefined ? { command } : {}),
-    ...(toolCall.title !== undefined ? { title: boundText(toolCall.title) } : {}),
-    ...(command !== undefined
-      ? { detail: command }
-      : toolCall.detail !== undefined
-        ? { detail: boundText(toolCall.detail) }
-        : {}),
+    ...(displayTitle !== undefined ? { title: boundText(displayTitle) } : {}),
+    ...(displayDetail !== undefined ? { detail: displayDetail } : {}),
     data,
   };
 }

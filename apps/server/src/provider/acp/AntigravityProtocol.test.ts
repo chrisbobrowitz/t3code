@@ -733,3 +733,141 @@ describe("Antigravity served reads", () => {
     });
   });
 });
+
+describe("Antigravity swarm tools", () => {
+  it.each([
+    {
+      title: "Run swarm",
+      rawInput: { action: "add", name: "server-impl", model: "gemini-4-neon", brief: "Build RPC" },
+      expectedTitle: "Add swarm worker",
+      expectedDetail: "server-impl (gemini-4-neon)",
+    },
+    {
+      title: "Run swarm",
+      rawInput: { action: "add", name: "reviewer", n: 3, brief: "Check diff" },
+      expectedTitle: "Add swarm worker",
+      expectedDetail: "reviewer (x3)",
+    },
+    {
+      title: "Run swarm",
+      rawInput: { action: "title", title: "Native Swarm Support" },
+      expectedTitle: "Name swarm",
+      expectedDetail: "Native Swarm Support",
+    },
+    {
+      title: "Run swarm",
+      rawInput: { action: "kill", name: "server-impl" },
+      expectedTitle: "Remove swarm worker",
+      expectedDetail: "server-impl",
+    },
+    {
+      title: "Run swarm",
+      rawInput: { action: "model", name: "server-impl", model: "gemini-4-hydrogen" },
+      expectedTitle: "Switch swarm worker model",
+      expectedDetail: "server-impl -> gemini-4-hydrogen",
+    },
+    {
+      title: "Run swarm",
+      rawInput: { action: "status" },
+      expectedTitle: "Check swarm status",
+      expectedDetail: undefined,
+    },
+    {
+      title: "Run swarm",
+      rawInput: { action: "models", all: true },
+      expectedTitle: "List swarm models",
+      expectedDetail: undefined,
+    },
+    {
+      title: "Run post_message",
+      rawInput: { text: "\n@coordinator [done] Server wired\nSecond line details" },
+      expectedTitle: "Post to swarm board",
+      expectedDetail: "@coordinator [done] Server wired",
+    },
+    {
+      title: "Run read_board",
+      rawInput: { since: 4 },
+      expectedTitle: "Read swarm board",
+      expectedDetail: "since #4",
+    },
+    {
+      title: "Run read_board",
+      rawInput: { seqs: [2, 6] },
+      expectedTitle: "Read swarm board",
+      expectedDetail: "#2, #6",
+    },
+    {
+      title: "Run read_board",
+      rawInput: { status: true },
+      expectedTitle: "Read swarm board",
+      expectedDetail: "roster status",
+    },
+    {
+      title: "Run swarm_wait",
+      rawInput: { since: 8, mentions_only: true },
+      expectedTitle: "Wait for swarm board",
+      expectedDetail: "since #8",
+    },
+    {
+      title: "Run swarm_wait",
+      rawInput: { since: 8, mentions_only: false },
+      expectedTitle: "Wait for swarm board",
+      expectedDetail: "since #8 (all)",
+    },
+  ])(
+    "normalizes $title ($rawInput.action) into a readable title and detail",
+    ({ title, rawInput, expectedTitle, expectedDetail }) => {
+      const event = parseToolUpdate({
+        sessionId: "session-1",
+        update: {
+          sessionUpdate: "tool_call",
+          toolCallId: "call_swarm_1",
+          title,
+          kind: "other",
+          status: "in_progress",
+          rawInput,
+        },
+      });
+      const normalized = normalizeAntigravityToolCall(event.toolCall);
+      expect(normalized.kind).toBe("other");
+      expect(normalized.title).toBe(expectedTitle);
+      expect(normalized.detail).toBe(expectedDetail);
+    },
+  );
+
+  it("leaves MCP tools with colliding swarm titles unchanged", () => {
+    const event = parseToolUpdate({
+      sessionId: "session-1",
+      update: {
+        sessionUpdate: "tool_call",
+        toolCallId: "call_mcp_swarm",
+        title: "Run swarm",
+        kind: "other",
+        status: "in_progress",
+        rawInput: { action: "add", name: "worker" },
+        _meta: { is_mcp_tool_call: true },
+      },
+    });
+    const normalized = normalizeAntigravityToolCall(event.toolCall);
+    expect(normalized.title).toBe("Run swarm");
+    expect(normalized.detail).toBeUndefined();
+  });
+
+  it("truncates long swarm post details without splitting surrogate pairs", () => {
+    const prefix = "a".repeat(156);
+    const event = parseToolUpdate({
+      sessionId: "session-1",
+      update: {
+        sessionUpdate: "tool_call",
+        toolCallId: "call_swarm_surrogate",
+        title: "Run post_message",
+        kind: "other",
+        status: "in_progress",
+        rawInput: { text: `${prefix}🚀 trailing text` },
+      },
+    });
+    const normalized = normalizeAntigravityToolCall(event.toolCall);
+    expect(normalized.title).toBe("Post to swarm board");
+    expect(normalized.detail).toBe(`${prefix}...`);
+  });
+});

@@ -114,7 +114,7 @@ export class OrchestrationV2GetAntigravitySwarmError extends Schema.TaggedError<
 
 export const OrchestrationV2GetAntigravitySwarmWorkerTranscriptInput = Schema.Struct({
   threadId: ThreadId,
-  workerName: TrimmedNonEmptyString,
+  workerName: TrimmedNonEmptyString.check(Schema.isMaxLength(64)),
 });
 export type OrchestrationV2GetAntigravitySwarmWorkerTranscriptInput =
   typeof OrchestrationV2GetAntigravitySwarmWorkerTranscriptInput.Type;
