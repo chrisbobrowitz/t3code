@@ -281,6 +281,15 @@ import {
   RelayClientStatusSchema,
 } from "./relayClient.ts";
 import {
+  ANTIGRAVITY_SWARM_WS_METHODS,
+  OrchestrationV2GetAntigravitySwarmError,
+  OrchestrationV2GetAntigravitySwarmInput,
+  OrchestrationV2GetAntigravitySwarmResult,
+  OrchestrationV2GetAntigravitySwarmWorkerTranscriptError,
+  OrchestrationV2GetAntigravitySwarmWorkerTranscriptInput,
+  OrchestrationV2GetAntigravitySwarmWorkerTranscriptResult,
+} from "./antigravitySwarm.ts";
+import {
   ORCHESTRATION_V2_WS_METHODS,
   OrchestrationGetWorkflowScriptError,
   OrchestrationV2GetNativeChildWorkError,
@@ -2248,6 +2257,24 @@ const WsOrchestrationV2GetNativeChildWorkRpc = Rpc.make(
   },
 );
 
+const WsOrchestrationV2GetAntigravitySwarmRpc = Rpc.make(ANTIGRAVITY_SWARM_WS_METHODS.getSwarm, {
+  payload: OrchestrationV2GetAntigravitySwarmInput,
+  success: OrchestrationV2GetAntigravitySwarmResult,
+  error: Schema.Union([OrchestrationV2GetAntigravitySwarmError, EnvironmentAuthorizationError]),
+});
+
+const WsOrchestrationV2GetAntigravitySwarmWorkerTranscriptRpc = Rpc.make(
+  ANTIGRAVITY_SWARM_WS_METHODS.getSwarmWorkerTranscript,
+  {
+    payload: OrchestrationV2GetAntigravitySwarmWorkerTranscriptInput,
+    success: OrchestrationV2GetAntigravitySwarmWorkerTranscriptResult,
+    error: Schema.Union([
+      OrchestrationV2GetAntigravitySwarmWorkerTranscriptError,
+      EnvironmentAuthorizationError,
+    ]),
+  },
+);
+
 const WsOrchestrationV2GetTurnItemRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.getTurnItem, {
   payload: OrchestrationV2RpcSchemas.getTurnItem.input,
   success: OrchestrationV2RpcSchemas.getTurnItem.output,
@@ -2718,6 +2745,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationV2DispatchCommandRpc,
   WsOrchestrationV2GetWorkflowScriptRpc,
   WsOrchestrationV2GetNativeChildWorkRpc,
+  WsOrchestrationV2GetAntigravitySwarmRpc,
+  WsOrchestrationV2GetAntigravitySwarmWorkerTranscriptRpc,
   WsOrchestrationV2StopWorkflowRpc,
   WsOrchestrationV2ForceStopThreadRpc,
   WsOrchestrationV2GetTurnItemRpc,

@@ -1,6 +1,7 @@
 import { msg } from "gt-i18n";
 import { translatableMessage } from "../errors/translatable.ts";
 import {
+  ANTIGRAVITY_SWARM_WS_METHODS,
   ORCHESTRATION_V2_WS_METHODS,
   type EnvironmentId,
   type ThreadId,
@@ -199,6 +200,27 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
       tag: ORCHESTRATION_V2_WS_METHODS.getNativeChildWork,
       staleTimeMs: 0,
       idleTtlMs: 0,
+    }),
+    antigravitySwarm: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:orchestration:antigravity-swarm",
+      tag: ANTIGRAVITY_SWARM_WS_METHODS.getSwarm,
+      staleTimeMs: 2_000,
+      idleTtlMs: 0,
+    }),
+    // Polls only while mounted (open Swarm panel or active swarm indicator).
+    antigravitySwarmLive: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:orchestration:antigravity-swarm-live",
+      tag: ANTIGRAVITY_SWARM_WS_METHODS.getSwarm,
+      staleTimeMs: 0,
+      idleTtlMs: 0,
+      refreshIntervalMs: 2_500,
+    }),
+    antigravitySwarmWorkerTranscript: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:orchestration:antigravity-swarm-worker-transcript",
+      tag: ANTIGRAVITY_SWARM_WS_METHODS.getSwarmWorkerTranscript,
+      staleTimeMs: 0,
+      idleTtlMs: 0,
+      refreshIntervalMs: 2_500,
     }),
     stopWorkflow: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:orchestration:stop-workflow",
