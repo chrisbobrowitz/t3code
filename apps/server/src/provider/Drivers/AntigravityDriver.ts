@@ -331,6 +331,7 @@ export const AntigravityDriver: ProviderDriver<
         ...runtimeInput,
         runtimeVersion: executable.version,
         authMethod: auth.authMethod,
+        authHasApiKey: Boolean(auth.apiKey),
         childProcessSpawner: spawner,
         spawn,
       }).pipe(Effect.provideService(SecureRandom.SecureRandom, random));

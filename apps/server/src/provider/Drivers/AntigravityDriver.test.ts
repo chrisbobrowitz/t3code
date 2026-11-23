@@ -93,6 +93,8 @@ const makeHarness = Effect.fn("makeAntigravityDriverHarness")(function* (
       readonly newSessionErrorData?: unknown;
       readonly initialMode?: string;
       readonly agentVersion?: string;
+      readonly requireAuth?: boolean;
+      readonly authMethodId?: string;
     } = {},
   ) {
     const directory = path.join(root, name);
@@ -115,6 +117,10 @@ const makeHarness = Effect.fn("makeAntigravityDriverHarness")(function* (
         ...(options.initialMode === undefined
           ? []
           : [`export T3_ACP_INITIAL_MODE=${shellQuote(options.initialMode)}`]),
+        ...(options.requireAuth ? ["export T3_ACP_REQUIRE_AUTH=1"] : []),
+        ...(options.authMethodId === undefined
+          ? []
+          : [`export T3_ACP_AUTH_METHOD_ID=${shellQuote(options.authMethodId)}`]),
         `export T3_ACP_AGENT_VERSION=${shellQuote(options.agentVersion ?? "1.5.12")}`,
         `exec ${shellQuote(nodePath)} ${shellQuote(mockAgentPath)} "$@"`,
         "",
@@ -662,6 +668,97 @@ it.layer(layerTest)("AntigravityDriver", (it) => {
         expect(after.models).toEqual(before.models);
         expect(after.auth).toEqual(before.auth);
         expect(JSON.stringify(after)).not.toContain("sk-secret-123");
+        yield* h.assertClosed;
+      }),
+  );
+
+  it.effect.skipIf(windowsHost)(
+    "skips ACP authenticate for Agent Platform ADC and surfaces auth-required without fallback",
+    () =>
+      Effect.gen(function* () {
+        const h = yield* makeHarness({
+          config: {
+            authMethod: "agent-platform",
+            gcpProject: "test-project",
+            gcpLocation: "global",
+          },
+        });
+        yield* h.refresh();
+        const ready = yield* h.instance.snapshot.getSnapshot;
+        expect(ready.status).toBe("ready");
+        expect(ready.auth.status).toBe("authenticated");
+        expect((yield* h.readRequests).map((request) => request.method)).toEqual([
+          "initialize",
+          "session/new",
+        ]);
+
+        const requestsBeforeSession = (yield* h.readRequests).length;
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            const workspace = yield* h.fs.makeTempDirectoryScoped({ prefix: "t3-ag-adc-" });
+            const threadId = ThreadId.make("thread-antigravity-adc");
+            const runtimePolicy = ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+              runtimeMode: "approval-required",
+              interactionMode: "default",
+              cwd: workspace,
+            });
+            const modelSelection = { instanceId: h.instance.instanceId, model: "gemini-test-low" };
+            const session = yield* h.instance.orchestrationAdapter.openSession({
+              threadId,
+              providerSessionId: ProviderSessionId.make("provider-session-antigravity-adc"),
+              modelSelection,
+              runtimePolicy,
+            });
+            yield* session.ensureThread({ threadId, modelSelection, runtimePolicy });
+          }),
+        );
+        expect(
+          (yield* h.readRequests).slice(requestsBeforeSession).map((request) => request.method),
+        ).toEqual(["initialize", "session/new", "session/close"]);
+
+        const requestsBeforeAuthRequired = (yield* h.readRequests).length;
+        h.controls.selected = yield* h.makeExecutable("runtime adc-unauthenticated", {
+          requireAuth: true,
+          authMethodId: "agent-platform",
+        });
+        const error = yield* h.refresh().pipe(Effect.flip);
+        expect(error.detail).toContain("Sign in to Antigravity");
+        const unauthenticated = yield* h.instance.snapshot.getSnapshot;
+        expect(unauthenticated.auth.status).toBe("unauthenticated");
+        expect(
+          (yield* h.readRequests)
+            .slice(requestsBeforeAuthRequired)
+            .map((request) => request.method),
+        ).toEqual(["initialize", "session/new"]);
+        yield* h.assertClosed;
+      }),
+  );
+
+  it.effect.skipIf(windowsHost)(
+    "authenticates eagerly for Agent Platform when an API key is configured",
+    () =>
+      Effect.gen(function* () {
+        const h = yield* makeHarness({
+          config: {
+            authMethod: "agent-platform",
+            apiKey: "vertex-test-key",
+          },
+        });
+        yield* h.refresh();
+        const snapshot = yield* h.instance.snapshot.getSnapshot;
+        expect(snapshot.status).toBe("ready");
+        expect(snapshot.auth.status).toBe("authenticated");
+        const requests = yield* h.readRequests;
+        expect(requests.map((request) => request.method)).toEqual([
+          "initialize",
+          "auth/login",
+          "session/new",
+        ]);
+        expect(
+          requests
+            .filter((request) => request.method === "auth/login")
+            .map((request) => request.params?.methodId),
+        ).toEqual(["agent-platform"]);
         yield* h.assertClosed;
       }),
   );

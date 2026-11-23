@@ -37,6 +37,7 @@ export interface AntigravityAcpRuntimeInput extends Omit<
   AcpSessionRuntime.AcpSessionRuntimeOptions,
   | "authMethodId"
   | "authenticateEagerly"
+  | "authenticateOnAuthRequired"
   | "cancelBehavior"
   | "clientCapabilities"
   | "clientInfo"
@@ -56,6 +57,7 @@ export interface AntigravityAcpRuntimeInput extends Omit<
   /** Conversational sessions only; helpers and probes leave the system prompt untouched. */
   readonly sessionSystemPromptAppend?: string;
   readonly authMethod?: AntigravityAuthMethod;
+  readonly authHasApiKey?: boolean;
 }
 
 function parseAntigravityVersion(version: string | null | undefined) {
@@ -118,11 +120,16 @@ export const makeAntigravityAcpRuntime = Effect.fn("makeAntigravityAcpRuntime")(
   EffectAcpErrors.AcpError,
   SecureRandom.SecureRandom | Scope.Scope
 > {
+  const authMethod = input.authMethod ?? "oauth-personal";
+  // Agent Platform ADC authenticates silently from settings.json on agy's server context;
+  // the authenticate RPC binds a per-RPC context that cancels OAuth refresh after an hour.
+  const authenticateViaRpc = !(authMethod === "agent-platform" && !input.authHasApiKey);
   const context = yield* Layer.build(
     AcpSessionRuntime.layer({
       ...input,
-      authMethodId: input.authMethod ?? "oauth-personal",
-      authenticateEagerly: true,
+      authMethodId: authMethod,
+      authenticateEagerly: authenticateViaRpc,
+      authenticateOnAuthRequired: authenticateViaRpc,
       resumeMethod: "resume",
       cancelBehavior: "wait-for-prompt",
       clientInfo: antigravityClientInfo(input.runtimeVersion),

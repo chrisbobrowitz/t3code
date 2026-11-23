@@ -42,6 +42,10 @@ ambient `GEMINI_API_KEY` and Google credential variables do not override them.
 Changing the method stops the instance's sessions. Sign out before replacing an
 account.
 
+When you configure Agent Platform with Application Default Credentials, `agy`
+authenticates from the profile's `settings.json` on startup. During long
+sessions, `agy` refreshes OAuth tokens without a restart.
+
 ## Runtime installation
 
 Managed installation supports Apple Silicon and Intel macOS, Linux x64 or ARM64
